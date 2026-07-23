@@ -282,14 +282,19 @@ impl CompareSession {
     pub fn finish(&mut self) -> String {
         let n = self.compared.max(1) as f64;
         let mean_sim = if self.compared > 0 { self.sum_sim / n } else { 0.0 };
-        let meta = || VideoMeta {
-            fps: self.fps, width: self.width, height: self.height,
-            total_frames: self.index, duration_ms: self.index as f64 / self.fps * 1000.0,
-            codec: "browser".into(),
-        };
+        if self.compared == 0 { return err_json("no pairs compared"); }
         let report = DegradationReport {
             schema_version: 1,
-            source_a: meta(), source_b: meta(),
+            source_a: VideoMeta {
+                fps: self.fps, width: self.width, height: self.height,
+                total_frames: self.index, duration_ms: self.index as f64 / self.fps * 1000.0,
+                codec: "browser".into(),
+            },
+            source_b: VideoMeta {
+                fps: self.fps, width: self.width, height: self.height,
+                total_frames: self.index, duration_ms: self.index as f64 / self.fps * 1000.0,
+                codec: "browser".into(),
+            },
             summary: DegradationSummary {
                 mean_score: if self.compared > 0 { self.sum_score / n } else { 0.0 },
                 mean_similarity: mean_sim,
