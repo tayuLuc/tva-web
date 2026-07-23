@@ -37,6 +37,44 @@
             <details><summary>Raw JSON Report</summary><pre id="raw-json"></pre></details>
         </section>
         <section id="error-section" hidden><p class="error" id="error-text"></p></section>
+
+        <!-- ── Compare two versions (case A) ── -->
+        <section id="compare-section">
+            <h2 class="section-title">Compare two versions</h2>
+            <p class="hint">Original vs. re-encoded (e.g. after a social upload). Both downscaled to 360p in-browser; exact comparison via CLI.</p>
+            <div class="compare-grid">
+                <div id="drop-a" class="drop-zone small">
+                    <p><b>A</b> — original<br><span class="slot-name" id="name-a">drop / browse</span></p>
+                    <input type="file" id="file-a" accept="video/mp4,video/webm" hidden>
+                </div>
+                <div id="drop-b" class="drop-zone small">
+                    <p><b>B</b> — compressed<br><span class="slot-name" id="name-b">drop / browse</span></p>
+                    <input type="file" id="file-b" accept="video/mp4,video/webm" hidden>
+                </div>
+            </div>
+            <div class="compare-controls">
+                <label>Metric
+                    <select id="cmp-metric">
+                        <option value="ssim" selected>SSIM</option>
+                        <option value="hybrid">Hybrid</option>
+                        <option value="mad">MAD</option>
+                    </select>
+                </label>
+                <button id="compare-btn" class="sample-btn" disabled>Compare A vs B</button>
+            </div>
+        </section>
+
+        <section id="compare-results" hidden>
+            <div class="cards">
+                <div class="card"><span class="card-value" id="cmp-drop">—</span><span class="card-label">Quality drop %</span></div>
+                <div class="card"><span class="card-value" id="cmp-mean">—</span><span class="card-label">Mean similarity</span></div>
+                <div class="card"><span class="card-value" id="cmp-min">—</span><span class="card-label">Worst frame</span></div>
+                <div class="card"><span class="card-value" id="cmp-pairs">—</span><span class="card-label">Pairs</span></div>
+                <div class="card"><span class="card-value" id="cmp-dropped">—</span><span class="card-label">Dropped</span></div>
+            </div>
+            <p id="cmp-mismatch" class="error" hidden></p>
+            <div class="chart-container"><canvas id="sim-chart"></canvas></div>
+        </section>
     </main>
     <footer>
         <p>Powered by <a href="https://github.com/tayuLuc/tva">tva-core</a> (Rust → WASM) ·

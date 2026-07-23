@@ -1,16 +1,17 @@
 #![forbid(unsafe_code)]
 
 use tva_core::{
-    adapters::image_compare::SsimComparator,
+    adapters::image_compare::metric_by_name,
     adapters::savgol::SavgolSmoother,
     config::PipelineConfig,
+    degradation::{compare_sources, DegradationConfig},
     detect::{self, DedupState, TearInfo},
+    events::NullSink,
     frame::{Frame, VideoMeta},
     metrics::{compute_frame_metrics, compute_summary},
     pixel_buffer::PixelBuffer,
-    traits::Smoother,
+    traits::{FrameDecoder, FrameComparator, Smoother},
     report::Report,
-    traits::FrameComparator,
 };
 use wasm_bindgen::prelude::*;
 
@@ -106,7 +107,7 @@ impl TvaSession {
             codec: "browser".into(),
         };
         let fm = compute_frame_metrics(&self.streaks, self.fps);
-        let summary = compute_summary(&fm, self.tears.len() as u64);
+        let summary = compute_summary(&fm, self.tears.len() as u64, 0);
         let fps_raw: Vec<f64> = fm.iter().map(|m| m.instantaneous_fps).collect();
         let smoother = SavgolSmoother { window: 21, polyorder: 3 };
         let fps_smooth = smoother.smooth(&fps_raw).unwrap_or(fps_raw);
@@ -126,4 +127,80 @@ impl TvaSession {
 #[wasm_bindgen]
 pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+// ── Compare (case A) ──
+
+fn err_json(msg: &str) -> String {
+    format!(r#"{{"error":"{msg}"}}"#)
+}
+
+struct BufSource {
+    frames: Vec<Frame>,
+    meta: VideoMeta,
+    pos: usize,
+}
+
+impl FrameDecoder for BufSource {
+    fn metadata(&self) -> &VideoMeta { &self.meta }
+    fn next_frame(&mut self) -> Option<Frame> {
+        if self.pos < self.frames.len() {
+            let f = self.frames[self.pos].clone();
+            self.pos += 1;
+            Some(f)
+        } else {
+            None
+        }
+    }
+}
+
+/// Compare two versions of the same clip (case A: before/after re-encoding).
+///
+/// Both buffers are concatenated RGB frames.
+/// Matching is by timestamp, so different container FPS is fine.
+#[wasm_bindgen]
+pub fn compare_frames_wasm(
+    data_a: Vec<u8>, width_a: u32, height_a: u32, fps_a: f64, count_a: usize,
+    data_b: Vec<u8>, width_b: u32, height_b: u32, fps_b: f64, count_b: usize,
+    metric: String, drift_ms: f64,
+) -> String {
+    let build = |data: Vec<u8>, w: u32, h: u32, fps: f64, n: usize| -> Result<(BufSource, VideoMeta), String> {
+        let fs = (w * h * 3) as usize;
+        if data.len() < fs * n {
+            return Err(format!("buffer too short for {n} frames at {w}x{h}"));
+        }
+        let mut frames = Vec::with_capacity(n);
+        for i in 0..n {
+            let off = i * fs;
+            let buf = PixelBuffer::new(data[off..off + fs].to_vec(), w, h)
+                .map_err(|e| e.to_string())?;
+            frames.push(Frame { data: buf, index: i as u64, timestamp_ms: i as f64 / fps * 1000.0 });
+        }
+        let meta = VideoMeta {
+            fps, width: w, height: h,
+            total_frames: frames.len() as u64,
+            duration_ms: frames.len() as f64 / fps * 1000.0,
+            codec: "browser".into(),
+        };
+        Ok((BufSource { frames, meta: meta.clone(), pos: 0 }, meta))
+    };
+
+    let (mut src_a, _) = match build(data_a, width_a, height_a, fps_a, count_a) {
+        Ok(x) => x, Err(e) => return err_json(&e),
+    };
+    let (mut src_b, _) = match build(data_b, width_b, height_b, fps_b, count_b) {
+        Ok(x) => x, Err(e) => return err_json(&e),
+    };
+
+    let spec = match metric_by_name(&metric) {
+        Ok(s) => s,
+        Err(e) => return err_json(&e.to_string()),
+    };
+    let cfg = DegradationConfig { max_time_drift_ms: if drift_ms > 0.0 { drift_ms } else { 16.0 } };
+
+    let mut sink = NullSink;
+    match compare_sources(&mut src_a, &mut src_b, spec.comparator.as_ref(), &cfg, &mut sink) {
+        Ok(report) => serde_json::to_string(&report).unwrap_or_else(|e| err_json(&e.to_string())),
+        Err(e) => err_json(&e.to_string()),
+    }
 }

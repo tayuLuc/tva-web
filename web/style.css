@@ -54,3 +54,16 @@ pre { background: var(--surface); border: 1px solid var(--border); border-radius
 .sample-btn:hover { opacity: 0.85; }
 footer { text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.8rem; }
 footer a { color: var(--accent); }
+
+/* ── Compare section ── */
+.section-title { margin: 2rem 0 0.25rem; font-size: 1.1rem; }
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0.75rem 0; }
+.drop-zone.small { padding: 1.5rem 1rem; }
+.drop-zone.small.filled { border-color: var(--green); border-style: solid; }
+.slot-name { color: var(--muted); font-size: 0.8rem; }
+.compare-controls { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; }
+.compare-controls select {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem;
+}
+.compare-controls button:disabled { opacity: 0.4; cursor: not-allowed; }

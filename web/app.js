@@ -1,4 +1,4 @@
-import init, { TvaSession, version } from "./pkg/tva_wasm.js";
+import init, { TvaSession, version, compare_frames_wasm } from "./pkg/tva_wasm.js";
 
 const MAX_DURATION_S = 10;
 const TARGET_HEIGHT = 360;
@@ -179,4 +179,150 @@ function hslToRgb(h, s, l) {
         r = hue(h + 1/3) * 255; g = hue(h) * 255; b = hue(h - 1/3) * 255;
     }
     return [Math.round(r), Math.round(g), Math.round(b)];
+}
+
+// ── Compare (case A) ──
+let fileA = null, fileB = null, simChart = null;
+
+function wireSlot(letter) {
+    const zone = document.getElementById(`drop-${letter}`);
+    const input = document.getElementById(`file-${letter}`);
+    zone.addEventListener("click", () => input.click());
+    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("dragover"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
+    zone.addEventListener("drop", (e) => {
+        e.preventDefault(); zone.classList.remove("dragover");
+        if (e.dataTransfer.files.length) setSlot(letter, e.dataTransfer.files[0]);
+    });
+    input.addEventListener("change", (e) => { if (e.target.files.length) setSlot(letter, e.target.files[0]); });
+}
+function setSlot(letter, file) {
+    if (letter === "a") fileA = file; else fileB = file;
+    const zone = document.getElementById(`drop-${letter}`);
+    zone.classList.add("filled");
+    document.getElementById(`name-${letter}`).textContent = file.name;
+    document.getElementById("compare-btn").disabled = !(fileA && fileB);
+}
+wireSlot("a"); wireSlot("b");
+
+document.getElementById("compare-btn").addEventListener("click", runCompare);
+
+async function extractFrames(file) {
+    const video = document.createElement("video");
+    video.muted = true; video.playsInline = true;
+    video.src = URL.createObjectURL(file);
+    await new Promise((resolve, reject) => {
+        video.onloadedmetadata = resolve;
+        video.onerror = () => reject(new Error("Cannot load video"));
+    });
+
+    const duration = Math.min(video.duration, MAX_DURATION_S);
+    const frameCount = Math.floor(duration * EXTRACT_FPS);
+    const scale = Math.min(1, TARGET_HEIGHT / video.videoHeight);
+    const width = Math.round(video.videoWidth * scale);
+    const height = Math.round(video.videoHeight * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    const rgbData = new Uint8Array(width * height * 3 * frameCount);
+    const fs = width * height * 3;
+
+    for (let i = 0; i < frameCount; i++) {
+        video.currentTime = i / EXTRACT_FPS;
+        await new Promise((r) => { video.onseeked = r; });
+        ctx.drawImage(video, 0, 0, width, height);
+        const imgData = ctx.getImageData(0, 0, width, height);
+        const rgba = imgData.data;
+        for (let j = 0, k = i * fs; j < rgba.length; j += 4, k += 3) {
+            rgbData[k] = rgba[j];
+            rgbData[k + 1] = rgba[j + 1];
+            rgbData[k + 2] = rgba[j + 2];
+        }
+    }
+
+    URL.revokeObjectURL(video.src);
+    return { rgbData, width, height, fps: EXTRACT_FPS, frameCount };
+}
+
+async function runCompare() {
+    hideError();
+    document.getElementById("compare-results").hidden = true;
+    try {
+        document.getElementById("progress-section").hidden = false;
+        document.getElementById("progress-fill").style.width = "0%";
+
+        document.getElementById("progress-text").textContent = "Extracting A…";
+        const a = await extractFrames(fileA);
+        document.getElementById("progress-fill").style.width = "45%";
+        document.getElementById("progress-text").textContent = "Extracting B…";
+        const b = await extractFrames(fileB);
+
+        document.getElementById("progress-fill").style.width = "90%";
+        document.getElementById("progress-text").textContent = "Comparing…";
+        await new Promise((r) => setTimeout(r, 30));
+
+        const metric = document.getElementById("cmp-metric").value;
+        const json = compare_frames_wasm(
+            a.rgbData, a.width, a.height, a.fps, a.frameCount,
+            b.rgbData, b.width, b.height, b.fps, b.frameCount,
+            metric, 16.0,
+        );
+        const report = JSON.parse(json);
+        if (report.error) { showError(`Compare error: ${report.error}`); return; }
+
+        document.getElementById("progress-fill").style.width = "100%";
+        document.getElementById("progress-text").textContent = "Done";
+        renderCompare(report);
+    } catch (e) {
+        showError(`Compare failed: ${e.message || e}`);
+    } finally {
+        setTimeout(() => { document.getElementById("progress-section").hidden = true; }, 500);
+    }
+}
+
+function renderCompare(r) {
+    const s = r.summary;
+    document.getElementById("cmp-drop").textContent = s.quality_drop_pct.toFixed(1);
+    document.getElementById("cmp-mean").textContent = s.mean_similarity.toFixed(3);
+    document.getElementById("cmp-min").textContent = s.min_similarity.toFixed(3);
+    document.getElementById("cmp-pairs").textContent = s.pairs_compared;
+    document.getElementById("cmp-dropped").textContent = s.pairs_dropped;
+
+    const mm = document.getElementById("cmp-mismatch");
+    if (r.size_mismatch) {
+        const m = r.size_mismatch;
+        mm.textContent = `Aspect/resolution differ after downscale (${m.a[0]}×${m.a[1]} vs ${m.b[0]}×${m.b[1]}) — likely a crop; no pixel comparison performed.`;
+        mm.hidden = false;
+    } else {
+        mm.hidden = true;
+    }
+
+    const ctx = document.getElementById("sim-chart").getContext("2d");
+    if (simChart) simChart.destroy();
+    simChart = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: r.profile.map((p) => (p.timestamp_ms / 1000).toFixed(1)),
+            datasets: [{
+                label: "Similarity (1 = identical)",
+                data: r.profile.map((p) => p.similarity),
+                borderColor: "#6366f1", borderWidth: 2, pointRadius: 0, fill: false,
+            }],
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: { display: true, text: "Degradation over time (dips = where compression hit)", color: "#e4e4e7" },
+                legend: { labels: { color: "#8b8d97" } },
+            },
+            scales: {
+                x: { title: { display: true, text: "seconds", color: "#8b8d97" }, ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } },
+                y: { min: 0, max: 1, title: { display: true, text: "similarity", color: "#8b8d97" }, ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } },
+            },
+        },
+    });
+
+    document.getElementById("compare-results").hidden = false;
 }
