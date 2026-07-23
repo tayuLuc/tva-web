@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use tva_core::{
-    adapters::image_compare::metric_by_name,
+    adapters::image_compare::{metric_by_name, SsimComparator},
     adapters::savgol::SavgolSmoother,
     config::PipelineConfig,
     degradation::{compare_sources, DegradationConfig},
@@ -142,7 +142,7 @@ struct BufSource {
 }
 
 impl FrameDecoder for BufSource {
-    fn metadata(&self) -> &VideoMeta { &self.meta }
+    fn metadata(&self) -> VideoMeta { self.meta.clone() }
     fn next_frame(&mut self) -> Option<Frame> {
         if self.pos < self.frames.len() {
             let f = self.frames[self.pos].clone();
