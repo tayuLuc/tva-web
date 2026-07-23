@@ -1,0 +1,8 @@
+[allowlist]
+paths = [
+  ".git",
+  "target",
+  "node_modules",
+  ".agents",
+  ".opencode",
+]

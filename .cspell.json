@@ -1,0 +1,30 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "tva", "tva-core", "tva-cli", "tva-ffi", "tva-wasm",
+    "tva-gui", "tva-web",
+    "PixelBuffer", "PixelBuffer",
+    "DynamicImage", "RgbImage",
+    "serde", "thiserror",
+    "savgol", "polyorder",
+    "rustfft", "FftPlanner",
+    "CIELAB", "Oklab", "SSIM",
+    "NVDEC", "VAAPI", "VideoToolbox",
+    "cbindgen", "cdylib", "staticlib",
+    "ffmpeg", "libavcodec",
+    "github", "clippy", "rustfmt",
+    "yamllint", "hadolint", "gitleaks",
+    "MegaLinter",
+    "hotplug"
+  ],
+  "flagWords": [],
+  "ignorePaths": [
+    "target/**",
+    "node_modules/**",
+    "pkg/**",
+    ".git/**",
+    ".agents/**",
+    ".opencode/**"
+  ]
+}

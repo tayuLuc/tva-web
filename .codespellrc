@@ -1,0 +1,4 @@
+[codespell]
+skip = .git,target,node_modules,pkg,.agents
+ignore-words-list = crate,ba,nd,ser,aks,fo
+check-hidden = true

@@ -1,0 +1,15 @@
+ls:
+  .rs: snake_case
+  .md: kebab-case
+  .yaml: kebab-case
+  .yml: kebab-case
+  .toml: kebab-case
+  .json: kebab-case
+  .sh: kebab-case
+
+ignore:
+  - .git
+  - target
+  - node_modules
+  - pkg
+  - .agents

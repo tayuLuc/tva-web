@@ -1,0 +1,61 @@
+# MegaLinter config — Rust flavor
+# https://megalinter.io/latest/config-file/
+
+APPLY_FIXES: none
+DEFAULT_BRANCH: main
+
+# Run only these linters (Rust linters handled in separate job with -D warnings)
+ENABLE_LINTERS:
+  - YAML_YAMLLINT
+  - YAML_PRETTIER
+  - JSON_JSONLINT
+  - JSON_PRETTIER
+  - MARKDOWN_MARKDOWNLINT
+  - MARKDOWN_PRETTIER
+  - SPELL_CODESPELL
+  - ACTION_ACTIONLINT
+  - DOCKERFILE_HADOLINT
+  - EDITORCONFIG_EDITORCONFIG_CHECKER
+  - REPOSITORY_GITLEAKS
+  - REPOSITORY_LS_LINT
+  - REPOSITORY_DEVSKIM
+  - REPOSITORY_TRIVY
+  - REPOSITORY_CHECKOV
+  - COPYPASTE_JSCPD
+  - SPELL_CSPELL
+
+MARKDOWN_MARKDOWNLINT_CONFIG_FILE: ".markdownlint.json"
+YAML_YAMLLINT_CONFIG_FILE: ".yamllint.yaml"
+YAML_PRETTIER_CONFIG_FILE: ".prettierrc.json"
+DOCKERFILE_HADOLINT_CONFIG_FILE: ".hadolint.yaml"
+SPELL_CODESPELL_CONFIG_FILE: ".codespellrc"
+REPOSITORY_LS_LINT_CONFIG_FILE: ".ls-lint.yml"
+REPOSITORY_GITLEAKS_CONFIG_FILE: ".gitleaks.toml"
+SPELL_CSPELL_CONFIG_FILE: ".cspell.json"
+
+# Directories to exclude
+EXCLUDED_DIRECTORIES:
+  - ".git"
+  - "target"
+  - "node_modules"
+  - "pkg"
+  - ".agents"
+  - ".opencode"
+
+# File extensions to include
+FILE_EXTENSIONS:
+  - ".rs"
+  - ".toml"
+  - ".yaml"
+  - ".yml"
+  - ".json"
+  - ".md"
+  - ".html"
+  - ".sh"
+  - "Dockerfile"
+
+# Show only errors in output
+PRINT_ALPACA: false
+SHOW_ELAPSED_TIME: true
+REPORT_OUTPUT_FOLDER: none
+VALIDATE_ALL_CODEBASE: false

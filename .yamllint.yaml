@@ -1,0 +1,7 @@
+extends: default
+rules:
+  line-length: {max: 120, allow-non-break: true}
+  document-start: false
+  truthy: {allowed-values: ["true", "false", "on", "yes"]}
+  braces: {max-spaces-inside: 1}
+  brackets: {max-spaces-inside: 1}

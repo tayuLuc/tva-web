@@ -14,6 +14,16 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  megalinter:
+    name: MegaLinter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: MegaLinter
+        uses: oxsecurity/megalinter/flavors/rust@v9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   wasm:
     name: WASM build
     runs-on: ubuntu-latest

@@ -1,0 +1,7 @@
+failure-threshold: error
+ignored:
+  - DL3008  # pin versions in apt get
+  - DL3018  # pin versions in apk
+override:
+  info:
+    - DL3059
