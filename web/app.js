@@ -43,6 +43,15 @@ function loadVideo(file) {
     });
 }
 
+function videoDims(video) {
+    const duration = Math.min(video.duration, MAX_DURATION_S);
+    const frameCount = Math.floor(duration * EXTRACT_FPS);
+    const scale = Math.min(1, TARGET_HEIGHT / video.videoHeight);
+    const width = Math.round(video.videoWidth * scale);
+    const height = Math.round(video.videoHeight * scale);
+    return { duration, frameCount, width, height };
+}
+
 function rgbaToRgb(src, dst, dstOff) {
     for (let j = 0, k = dstOff || 0; j < src.length; j += 4, k += 3) {
         dst[k] = src[j]; dst[k + 1] = src[j + 1]; dst[k + 2] = src[j + 2];
@@ -51,11 +60,7 @@ function rgbaToRgb(src, dst, dstOff) {
 
 async function analyzeWithSession(file) {
     const video = await loadVideo(file);
-    const duration = Math.min(video.duration, MAX_DURATION_S);
-    const frameCount = Math.floor(duration * EXTRACT_FPS);
-    const scale = Math.min(1, TARGET_HEIGHT / video.videoHeight);
-    const width = Math.round(video.videoWidth * scale);
-    const height = Math.round(video.videoHeight * scale);
+    const { frameCount, width, height } = videoDims(video);
     const fps = EXTRACT_FPS;
 
     const canvas = document.createElement("canvas");
@@ -214,12 +219,7 @@ document.getElementById("compare-btn").addEventListener("click", runCompare);
 
 async function extractFrames(file) {
     const video = await loadVideo(file);
-
-    const duration = Math.min(video.duration, MAX_DURATION_S);
-    const frameCount = Math.floor(duration * EXTRACT_FPS);
-    const scale = Math.min(1, TARGET_HEIGHT / video.videoHeight);
-    const width = Math.round(video.videoWidth * scale);
-    const height = Math.round(video.videoHeight * scale);
+    const { duration, frameCount, width, height } = videoDims(video);
 
     const canvas = document.createElement("canvas");
     canvas.width = width; canvas.height = height;
