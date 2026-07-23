@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TVA Web Demo</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 2rem; }
+  video { width: 100%; max-height: 540px; }
+  #results { margin-top: 1rem; }
+  canvas { margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Temporal Video Analyzer — Web Demo</h1>
+<p>Select a short video clip (&lt;30s, H.264) to analyze.</p>
+<input type="file" accept="video/*" id="fileInput">
+<video id="preview" controls></video>
+<div id="results"></div>
+<canvas id="chart"></canvas>
+<script type="module">
+  // ponytail: stub — WebCodecs + WASM integration when WASM crate is ready
+  document.getElementById('fileInput').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // TODO: init wasm, decode frames via WebCodecs, call analyze_frames_wasm, render Chart.js
+    document.getElementById('results').textContent = 'Analysis coming soon';
+  });
+</script>
+</body>
+</html>
