@@ -13,3 +13,4 @@ ignore:
   - node_modules
   - pkg
   - .agents
+  - "**/Cargo.toml"
