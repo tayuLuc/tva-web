@@ -33,15 +33,24 @@ async function handleFile(file) {
     } catch (e) { showError(`Failed: ${e.message || e}`); }
 }
 
-async function analyzeWithSession(file) {
-    const video = document.createElement("video");
-    video.muted = true; video.playsInline = true;
-    video.src = URL.createObjectURL(file);
-    await new Promise((resolve, reject) => {
-        video.onloadedmetadata = resolve;
+function loadVideo(file) {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement("video");
+        video.muted = true; video.playsInline = true;
+        video.src = URL.createObjectURL(file);
+        video.onloadedmetadata = () => resolve(video);
         video.onerror = () => reject(new Error("Cannot load video"));
     });
+}
 
+function rgbaToRgb(src, dst, dstOff) {
+    for (let j = 0, k = dstOff || 0; j < src.length; j += 4, k += 3) {
+        dst[k] = src[j]; dst[k + 1] = src[j + 1]; dst[k + 2] = src[j + 2];
+    }
+}
+
+async function analyzeWithSession(file) {
+    const video = await loadVideo(file);
     const duration = Math.min(video.duration, MAX_DURATION_S);
     const frameCount = Math.floor(duration * EXTRACT_FPS);
     const scale = Math.min(1, TARGET_HEIGHT / video.videoHeight);
@@ -62,13 +71,8 @@ async function analyzeWithSession(file) {
         const imgData = ctx.getImageData(0, 0, width, height);
         const rgba = imgData.data;
 
-        // RGBA → RGB
         const rgb = new Uint8Array(width * height * 3);
-        for (let j = 0, k = 0; j < rgba.length; j += 4, k += 3) {
-            rgb[k] = rgba[j];
-            rgb[k + 1] = rgba[j + 1];
-            rgb[k + 2] = rgba[j + 2];
-        }
+        rgbaToRgb(rgba, rgb);
 
         session.push_frame(rgb);
         setProgress(Math.round((i / frameCount) * 95), `Frame ${i + 1}/${frameCount}`);
@@ -209,13 +213,7 @@ wireSlot("a"); wireSlot("b");
 document.getElementById("compare-btn").addEventListener("click", runCompare);
 
 async function extractFrames(file) {
-    const video = document.createElement("video");
-    video.muted = true; video.playsInline = true;
-    video.src = URL.createObjectURL(file);
-    await new Promise((resolve, reject) => {
-        video.onloadedmetadata = resolve;
-        video.onerror = () => reject(new Error("Cannot load video"));
-    });
+    const video = await loadVideo(file);
 
     const duration = Math.min(video.duration, MAX_DURATION_S);
     const frameCount = Math.floor(duration * EXTRACT_FPS);
@@ -234,13 +232,7 @@ async function extractFrames(file) {
         video.currentTime = i / EXTRACT_FPS;
         await new Promise((r) => { video.onseeked = r; });
         ctx.drawImage(video, 0, 0, width, height);
-        const imgData = ctx.getImageData(0, 0, width, height);
-        const rgba = imgData.data;
-        for (let j = 0, k = i * fs; j < rgba.length; j += 4, k += 3) {
-            rgbData[k] = rgba[j];
-            rgbData[k + 1] = rgba[j + 1];
-            rgbData[k + 2] = rgba[j + 2];
-        }
+        rgbaToRgb(ctx.getImageData(0, 0, width, height).data, rgbData, i * fs);
     }
 
     URL.revokeObjectURL(video.src);
@@ -380,9 +372,7 @@ function grabFrame(file, t, width, height) {
             ctx.drawImage(video, 0, 0, width, height);
             const src = ctx.getImageData(0, 0, width, height).data;
             const rgb = new Uint8Array(width * height * 3);
-            for (let j = 0, k = 0; j < src.length; j += 4, k += 3) {
-                rgb[k] = src[j]; rgb[k + 1] = src[j + 1]; rgb[k + 2] = src[j + 2];
-            }
+            rgbaToRgb(src, rgb);
             URL.revokeObjectURL(url);
             resolve(rgb);
         };
