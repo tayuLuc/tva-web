@@ -1,0 +1,7 @@
+*.rs     text diff=rust
+*.toml   text diff=toml
+*.yaml   text diff=yaml
+*.yml    text diff=yaml
+*.md     text diff=markdown
+*.json   text diff=json
+Cargo.lock text -diff

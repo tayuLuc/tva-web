@@ -1,5 +1,8 @@
 # tva-web
 
+[![CI](https://github.com/YOUR_USER/tva-web/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USER/tva-web/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 WASM demo for [Temporal Video Analyzer](https://github.com/YOUR_USER/tva) — analyze short video clips in the browser.
 
 ## How it works
