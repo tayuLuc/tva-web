@@ -152,13 +152,34 @@ footer a { color: var(--accent); }
 }
 .diff-figure figcaption { color: var(--muted); font-size: 0.75rem; margin-top: 0.3rem; }
 
-/* ── lightbox ── */
-#lightbox {
-    position: fixed; inset: 0; z-index: 100;
-    display: grid; place-items: center;
-}
+/* ── lightbox с зумом ── */
+#lightbox { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: rgba(0,0,0,0.9); }
 #lightbox[hidden] { display: none; }
-.lb-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.85); cursor: zoom-out; }
-.lb-figure { position: relative; margin: 0; max-width: 92vw; max-height: 92vh; text-align: center; }
-.lb-figure img { max-width: 92vw; max-height: 86vh; image-rendering: pixelated; border-radius: 8px; }
-.lb-figure figcaption { color: #fff; font-size: 0.85rem; margin-top: 0.5rem; }
+.lb-figure {
+    position: relative; width: 92vw; height: 88vh;
+    overflow: hidden; cursor: zoom-in; touch-action: none;
+}
+.lb-figure.zoomed { cursor: grab; }
+.lb-figure.zoomed.panning { cursor: grabbing; }
+.lb-figure img {
+    width: 100%; height: 100%; object-fit: contain;
+    transform-origin: center center;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+}
+.lb-figure img.pixelated { image-rendering: pixelated; }
+.lb-close {
+    position: absolute; top: 10px; right: 12px; z-index: 2;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: rgba(0,0,0,0.6); color: #fff; border: 1px solid var(--border);
+    font-size: 16px; cursor: pointer;
+}
+.lb-cap { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; color: #fff; font-size: 0.85rem; pointer-events: none; }
+.lb-hint { position: absolute; top: 12px; left: 14px; color: var(--muted); font-size: 0.72rem; pointer-events: none; }
+
+/* ── cmp-bits & limits ── */
+.cmp-bits { margin-top: 0.4rem; font-variant-numeric: tabular-nums; }
+.limits-panel { background: transparent; border-style: dashed; }
+.limits { margin: 0.4rem 0 0 1.1rem; color: var(--muted); font-size: 0.82rem; line-height: 1.55; }
+.limits b { color: var(--text); }
+.limits code { color: var(--accent); font-size: 0.78rem; }
+.limits-panel a { color: var(--accent); }

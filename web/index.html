@@ -96,12 +96,13 @@
 
             <section id="compare-results" hidden>
                 <div class="cards">
-                    <div class="card" data-tip="Estimated quality lost to re-encoding. 0 = identical."><span class="card-value" id="cmp-drop">—</span><span class="card-label">Quality drop %</span></div>
-                    <div class="card" data-tip="Average per-frame similarity, 1 = identical."><span class="card-value" id="cmp-mean">—</span><span class="card-label">Mean similarity</span></div>
-                    <div class="card" data-tip="Lowest-similarity matched pair in the clip."><span class="card-value" id="cmp-min">—</span><span class="card-label">Worst frame</span></div>
-                    <div class="card" data-tip="Frame pairs matched by timestamp."><span class="card-value" id="cmp-pairs">—</span><span class="card-label">Pairs</span></div>
-                    <div class="card" data-tip="Frames with no timestamp match in the other clip."><span class="card-value" id="cmp-dropped">—</span><span class="card-label">Dropped</span></div>
+                    <div class="card" data-tip="Estimated quality lost to re-encoding. 0 = identical."><span class="card-value" id="cmp-drop">&#8212;</span><span class="card-label">Quality drop %</span></div>
+                    <div class="card" data-tip="Average per-frame similarity, 1 = identical."><span class="card-value" id="cmp-mean">&#8212;</span><span class="card-label">Mean similarity</span></div>
+                    <div class="card" data-tip="Lowest-similarity matched pair in the clip."><span class="card-value" id="cmp-min">&#8212;</span><span class="card-label">Worst frame</span></div>
+                    <div class="card" data-tip="Frame pairs matched by timestamp."><span class="card-value" id="cmp-pairs">&#8212;</span><span class="card-label">Pairs</span></div>
+                    <div class="card" data-tip="Frames with no timestamp match in the other clip."><span class="card-value" id="cmp-dropped">&#8212;</span><span class="card-label">Dropped</span></div>
                 </div>
+                <p class="hint cmp-bits" id="cmp-bits"></p>
                 <p id="cmp-mismatch" class="error" hidden></p>
                 <div class="chart-container">
                     <canvas id="sim-chart"></canvas>
@@ -134,15 +135,32 @@
 
         <!-- lightbox -->
         <div id="lightbox" hidden>
-            <div class="lb-backdrop" data-close></div>
             <figure class="lb-figure">
+                <button class="lb-close" data-close aria-label="Close">&times;</button>
+                <span class="lb-hint">scroll = zoom &middot; drag = pan &middot; dbl-click = reset</span>
                 <img id="lb-img" alt="">
                 <figcaption id="lb-cap"></figcaption>
             </figure>
         </div>
+
+        <!-- &#9733;&#9733;&#9733;&#9733;&#9733;&#9733;&#9733;&#9733;&#9733; ограничения демо &#9733;&#9733;&#9733;&#9733;&#9733;&#9733;&#9733;&#9733; -->
+        <section class="panel limits-panel">
+            <div class="panel-head">
+                <h2 class="panel-title">Browser demo limits</h2>
+                <p class="panel-sub">This page is a quick-look vitrine. For the rest, use the CLI or the Tauri desktop GUI.</p>
+            </div>
+            <ul class="limits">
+                <li><b>Source FPS (e.g. "24 real of 60 container")</b> &mdash; not available: the browser&rsquo;s <code>&lt;video&gt;</code> hides the container frame rate; we extract a fixed 30. The CLI reads it via ffprobe.</li>
+                <li><b>Native-resolution analysis</b> &mdash; the demo downscales (360p, or the smaller source in round-trip) to fit browser memory. Pixel-exact work on a 4K file is CLI/GUI only.</li>
+                <li><b>Clip length</b> &mdash; capped at 10s (seek-based extraction is slow, not a memory limit after the streaming rewrite).</li>
+                <li><b>Overlay video export</b> &mdash; not in the browser; the CLI/Tauri render frames with the FPS overlay.</li>
+                <li><b>Effective bitrate</b> shown above is <code>filesize &divide; duration</code> of the downloaded file &mdash; a ranking proxy, not the host&rsquo;s true encoder bitrate.</li>
+            </ul>
+            <p class="hint">Full analysis &rarr; <a href="https://github.com/tayuLuc/tva">tva (CLI)</a> &middot; desktop &rarr; <a href="https://github.com/tayuLuc/tva-gui">tva-gui (Tauri)</a>.</p>
+        </section>
     </main>
     <footer>
-        <p>Powered by <a href="https://github.com/tayuLuc/tva">tva-core</a> (Rust → WASM) ·
+        <p>Powered by <a href="https://github.com/tayuLuc/tva">tva-core</a> (Rust &rarr; WASM) &middot;
            Frames never leave your browser</p>
     </footer>
     <script type="module" src="app.js"></script>

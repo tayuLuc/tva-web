@@ -1,4 +1,4 @@
-import init, { TvaSession, version, compare_frames_wasm, diff_heatmap_wasm } from "./pkg/tva_wasm.js";
+import init, { TvaSession, CompareSession, version, compare_frames_wasm, diff_heatmap_wasm } from "./pkg/tva_wasm.js";
 
 const MAX_DURATION_S = 10;
 const TARGET_HEIGHT = 360;
@@ -347,7 +347,7 @@ async function seekHeat(idx) {
         drawRgb(document.getElementById("hm-b"), rgbB, width, height);
 
         const gray = diff_heatmap_wasm(rgbA, rgbB);
-        drawGray(document.getElementById("hm-diff"), gray, width, height);
+        drawGray(document.getElementById("hm-diff"), stretchGray(gray), width, height);
         document.getElementById("ba-slider").style.setProperty("--pos", "50%");
 
         document.getElementById("heatmap-meta").textContent =
@@ -400,6 +400,22 @@ function drawGray(canvas, gray, w, h) {
     ctx.putImageData(img, 0, 0);
 }
 
+// Контраст-стретч: p99 яркости → белое.
+function stretchGray(gray) {
+    const n = gray.length;
+    if (n === 0) return gray;
+    const hist = new Uint32Array(256);
+    let maxv = 0;
+    for (let i = 0; i < n; i++) { const v = gray[i]; hist[v]++; if (v > maxv) maxv = v; }
+    if (maxv === 0) return gray;
+    const target = Math.floor(n * 0.99);
+    let acc = 0, white = 255;
+    for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= target) { white = v || 1; break; } }
+    const out = new Uint8Array(n);
+    for (let i = 0; i < n; i++) { out[i] = Math.min(255, (gray[i] * 255 / white) | 0); }
+    return out;
+}
+
 // ── Before/After slider (drag) + click-to-enlarge ──
 (function initSlider() {
     const slider = document.getElementById("ba-slider");
@@ -428,24 +444,82 @@ function drawGray(canvas, gray, w, h) {
         if (moved < 6) {
             const r = slider.getBoundingClientRect();
             const side = (e.clientX - r.left) < r.width / 2 ? "hm-a" : "hm-b";
-            openLightbox(side, side === "hm-a" ? "A — original" : "B — compressed");
+            openLightbox(side, side === "hm-a" ? "A — original" : "B — compressed", false);
         }
     });
 })();
 
-// ── Lightbox (enlarge on click) ──
-function openLightbox(canvasId, caption) {
+// ── Lightbox: растягивание + зум колесом + pan перетаскиванием ──
+const lb = {
+    el: document.getElementById("lightbox"),
+    fig: null, img: null,
+    z: 1, px: 0, py: 0,
+    down: false, moved: 0, lx: 0, ly: 0,
+};
+lb.fig = lb.el.querySelector(".lb-figure");
+lb.img = document.getElementById("lb-img");
+
+function lbApply() {
+    lb.img.style.transform = `translate(${lb.px}px, ${lb.py}px) scale(${lb.z})`;
+    lb.fig.classList.toggle("zoomed", lb.z > 1.01);
+}
+function lbReset() { lb.z = 1; lb.px = 0; lb.py = 0; lbApply(); }
+
+function openLightbox(canvasId, caption, pixelated) {
     const c = document.getElementById(canvasId);
     if (!c) return;
-    document.getElementById("lb-img").src = c.toDataURL();
+    lb.img.src = c.toDataURL();
+    lb.img.className = pixelated ? "pixelated" : "";
     document.getElementById("lb-cap").textContent = caption;
-    document.getElementById("lightbox").hidden = false;
+    lbReset();
+    lb.el.hidden = false;
 }
-function closeLightbox() { document.getElementById("lightbox").hidden = true; }
+function closeLightbox() { lb.el.hidden = true; lbReset(); }
 
-document.getElementById("lightbox").addEventListener("click", (e) => {
-    if (e.target.dataset.close !== undefined || e.target.id === "lightbox") closeLightbox();
+lb.fig.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    lb.z = Math.max(1, Math.min(8, lb.z * f));
+    if (lb.z === 1) { lb.px = 0; lb.py = 0; }
+    lbApply();
+}, { passive: false });
+
+lb.fig.addEventListener("pointerdown", (e) => {
+    lb.down = true; lb.moved = 0; lb.lx = e.clientX; lb.ly = e.clientY;
+    lb.fig.setPointerCapture(e.pointerId);
+    if (lb.z > 1.01) lb.fig.classList.add("panning");
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLightbox(); });
+lb.fig.addEventListener("pointermove", (e) => {
+    if (!lb.down) return;
+    const dx = e.clientX - lb.lx, dy = e.clientY - lb.ly;
+    lb.moved += Math.abs(dx) + Math.abs(dy);
+    lb.lx = e.clientX; lb.ly = e.clientY;
+    if (lb.z > 1.01) { lb.px += dx; lb.py += dy; lbApply(); }
+});
+lb.fig.addEventListener("pointerup", () => {
+    lb.fig.classList.remove("panning");
+    if (!lb.down) return;
+    lb.down = false;
+    if (lb.moved < 6 && lb.z <= 1.01) closeLightbox();
+});
 
-document.getElementById("hm-diff").addEventListener("click", () => openLightbox("hm-diff", "Δ heatmap"));
+lb.fig.addEventListener("dblclick", (e) => { e.preventDefault(); lbReset(); });
+
+lb.el.addEventListener("click", (e) => { if (e.target.dataset.close !== undefined) closeLightbox(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !lb.el.hidden) closeLightbox(); });
+
+document.getElementById("hm-diff").addEventListener("click", () => openLightbox("hm-diff", "Δ heatmap (contrast-stretched)", true));
+
+// ── Resource monitoring helpers ──
+function resourceSnapshot() {
+    const m = performance.memory;
+    const heap = m ? `${(m.usedJSHeapSize / 1048576).toFixed(0)} / ${(m.jsHeapSizeLimit / 1048576).toFixed(0)} MB heap` : "heap n/a (non-Chromium)";
+    const cores = navigator.hardwareConcurrency ?? "?";
+    const ram = navigator.deviceMemory ? `${navigator.deviceMemory} GB RAM` : "RAM n/a";
+    return `${heap} · ${cores} cores · ${ram}`;
+}
+function effectiveMbps(file, duration) {
+    if (!duration || duration <= 0) return null;
+    return (file.size * 8) / duration / 1e6;
+}
+function even(x) { return x + (x & 1); }

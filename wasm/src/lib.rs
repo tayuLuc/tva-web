@@ -4,7 +4,7 @@ use tva_core::{
     adapters::image_compare::{metric_by_name, SsimComparator},
     adapters::savgol::SavgolSmoother,
     config::PipelineConfig,
-    degradation::{compare_sources, DegradationConfig},
+    degradation::{compare_sources, DegradationConfig, diff_pixel_ratio, DegradationPoint, DegradationReport, DegradationSummary, SizeMismatch},
     detect::{self, DedupState, TearInfo},
     events::NullSink,
     frame::{Frame, VideoMeta},
@@ -213,4 +213,84 @@ use tva_core::degradation::diff_heatmap;
 #[wasm_bindgen]
 pub fn diff_heatmap_wasm(a: Vec<u8>, b: Vec<u8>) -> Vec<u8> {
     diff_heatmap(&a, &b)
+}
+
+// ── Streaming CompareSession ──
+
+/// Streaming compare: one pair at a time, O(1) memory.
+#[wasm_bindgen]
+pub struct CompareSession {
+    comparator: Box<dyn FrameComparator>,
+    higher: bool,
+    fps: f64,
+    width: u32,
+    height: u32,
+    index: u64,
+    sum_score: f64,
+    sum_sim: f64,
+    min_sim: f64,
+    compared: u64,
+    profile: Vec<DegradationPoint>,
+}
+
+#[wasm_bindgen]
+impl CompareSession {
+    #[wasm_bindgen(constructor)]
+    pub fn new(metric: String, width: u32, height: u32, fps: f64) -> Result<CompareSession, JsValue> {
+        let spec = metric_by_name(&metric).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        Ok(CompareSession {
+            higher: spec.comparator.higher_is_similar(),
+            comparator: spec.comparator,
+            fps, width, height,
+            index: 0, sum_score: 0.0, sum_sim: 0.0, min_sim: f64::INFINITY,
+            compared: 0, profile: Vec::new(),
+        })
+    }
+
+    pub fn push_pair(&mut self, a: &[u8], b: &[u8]) -> Result<(), JsValue> {
+        let buf_a = PixelBuffer::new(a.to_vec(), self.width, self.height)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let buf_b = PixelBuffer::new(b.to_vec(), self.width, self.height)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let score = self.comparator.compare(&buf_a, &buf_b)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let sim = if self.higher { score.clamp(0.0, 1.0) } else { (1.0 - score / 255.0).clamp(0.0, 1.0) };
+        let ratio = diff_pixel_ratio(buf_a.as_bytes(), buf_b.as_bytes());
+        self.sum_score += score;
+        self.sum_sim += sim;
+        if sim < self.min_sim { self.min_sim = sim; }
+        self.compared += 1;
+        self.profile.push(DegradationPoint {
+            timestamp_ms: self.index as f64 / self.fps * 1000.0,
+            similarity: sim,
+            diff_pixel_ratio: ratio,
+        });
+        self.index += 1;
+        Ok(())
+    }
+
+    pub fn finish(&mut self) -> String {
+        let n = self.compared.max(1) as f64;
+        let mean_sim = if self.compared > 0 { self.sum_sim / n } else { 0.0 };
+        let meta = || VideoMeta {
+            fps: self.fps, width: self.width, height: self.height,
+            total_frames: self.index, duration_ms: self.index as f64 / self.fps * 1000.0,
+            codec: "browser".into(),
+        };
+        let report = DegradationReport {
+            schema_version: 1,
+            source_a: meta(), source_b: meta(),
+            summary: DegradationSummary {
+                mean_score: if self.compared > 0 { self.sum_score / n } else { 0.0 },
+                mean_similarity: mean_sim,
+                min_similarity: if self.compared > 0 { self.min_sim } else { 0.0 },
+                quality_drop_pct: (1.0 - mean_sim) * 100.0,
+                pairs_compared: self.compared,
+                pairs_dropped: 0,
+            },
+            profile: std::mem::take(&mut self.profile),
+            size_mismatch: None,
+        };
+        serde_json::to_string(&report).unwrap_or_else(|e| err_json(&e.to_string()))
+    }
 }
