@@ -8,6 +8,7 @@ use tva_core::{
     frame::{Frame, VideoMeta},
     metrics::{compute_frame_metrics, compute_summary},
     pixel_buffer::PixelBuffer,
+    traits::Smoother,
     report::Report,
     traits::FrameComparator,
 };
