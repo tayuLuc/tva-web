@@ -523,3 +523,27 @@ function effectiveMbps(file, duration) {
     return (file.size * 8) / duration / 1e6;
 }
 function even(x) { return x + (x & 1); }
+
+// ── metric explainer ──
+const METRIC_INFO = {
+    ssim: {
+        t: "SSIM — structural similarity (default)",
+        d: "Compares structure, not raw pixels. Ignores faint compression noise, flags real structural damage. Best for \u201ca social network re-encoded my clip\u201d. Score 0\u20131, higher = closer.",
+    },
+    hybrid: {
+        t: "Hybrid \u2014 structure + colour/luma",
+        d: "SSIM blended with colour and brightness signals. A touch more sensitive to colour shifts and banding than plain SSIM. Score 0\u20131.",
+    },
+    mad: {
+        t: "MAD \u2014 raw per-pixel difference",
+        d: "Mean absolute byte difference, scale 0\u2013255. Sees *all* noise, including compression grain \u2014 so it reports \u201csomething changed everywhere\u201d even when SSIM says \u201cfine\u201d. Use for clean/capture content, or to prove noise exists. Not a 0\u20131 score.",
+    },
+};
+function updateMetricDesc(val) {
+    const el = document.getElementById("cmp-metric-desc");
+    const info = METRIC_INFO[val] || METRIC_INFO.ssim;
+    el.innerHTML = `<b>${info.t}</b> \u2014 ${info.d}`;
+}
+const metricSel = document.getElementById("cmp-metric");
+metricSel.addEventListener("change", (e) => updateMetricDesc(e.target.value));
+updateMetricDesc(metricSel.value);

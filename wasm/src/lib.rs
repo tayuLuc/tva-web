@@ -10,6 +10,7 @@ use tva_core::{
     frame::{Frame, VideoMeta},
     metrics::{compute_frame_metrics, compute_summary},
     pixel_buffer::PixelBuffer,
+    resolution::{laplacian_sharpness, rgb_to_gray},
     traits::{FrameDecoder, FrameComparator, Smoother},
     report::Report,
 };
@@ -230,6 +231,8 @@ pub struct CompareSession {
     sum_sim: f64,
     min_sim: f64,
     compared: u64,
+    sum_sharp_a: f64,
+    sum_sharp_b: f64,
     profile: Vec<DegradationPoint>,
 }
 
@@ -243,7 +246,7 @@ impl CompareSession {
             comparator: spec.comparator,
             fps, width, height,
             index: 0, sum_score: 0.0, sum_sim: 0.0, min_sim: f64::INFINITY,
-            compared: 0, profile: Vec::new(),
+            compared: 0, sum_sharp_a: 0.0, sum_sharp_b: 0.0, profile: Vec::new(),
         })
     }
 
@@ -260,6 +263,13 @@ impl CompareSession {
         self.sum_sim += sim;
         if sim < self.min_sim { self.min_sim = sim; }
         self.compared += 1;
+        // Резкость границ (Laplacian) каждой стороны.
+        let ga = rgb_to_gray(a);
+        let sa = laplacian_sharpness(&ga, self.width as usize, self.height as usize);
+        let gb = rgb_to_gray(b);
+        let sb = laplacian_sharpness(&gb, self.width as usize, self.height as usize);
+        self.sum_sharp_a += sa;
+        self.sum_sharp_b += sb;
         self.profile.push(DegradationPoint {
             timestamp_ms: self.index as f64 / self.fps * 1000.0,
             similarity: sim,
@@ -292,5 +302,14 @@ impl CompareSession {
             size_mismatch: None,
         };
         serde_json::to_string(&report).unwrap_or_else(|e| err_json(&e.to_string()))
+    }
+
+    #[wasm_bindgen]
+    pub fn mean_sharpness_a(&self) -> f64 {
+        if self.compared > 0 { self.sum_sharp_a / self.compared as f64 } else { 0.0 }
+    }
+    #[wasm_bindgen]
+    pub fn mean_sharpness_b(&self) -> f64 {
+        if self.compared > 0 { self.sum_sharp_b / self.compared as f64 } else { 0.0 }
     }
 }

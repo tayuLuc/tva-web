@@ -178,6 +178,13 @@ footer a { color: var(--accent); }
 
 /* ── cmp-bits & limits ── */
 .cmp-bits { margin-top: 0.4rem; font-variant-numeric: tabular-nums; }
+.cmp-sharp { margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
+.metric-desc {
+    color: var(--muted); font-size: 0.8rem; line-height: 1.45;
+    margin: 0.25rem 0 1rem; padding: 0.6rem 0.8rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+}
+.metric-desc b { color: var(--text); }
 .limits-panel { background: transparent; border-style: dashed; }
 .limits { margin: 0.4rem 0 0 1.1rem; color: var(--muted); font-size: 0.82rem; line-height: 1.55; }
 .limits b { color: var(--text); }

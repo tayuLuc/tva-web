@@ -93,6 +93,7 @@
                 </label>
                 <button id="compare-btn" class="sample-btn" disabled>Compare A vs B</button>
             </div>
+            <p class="metric-desc" id="cmp-metric-desc"></p>
 
             <section id="compare-results" hidden>
                 <div class="cards">
@@ -103,6 +104,7 @@
                     <div class="card" data-tip="Frames with no timestamp match in the other clip."><span class="card-value" id="cmp-dropped">&#8212;</span><span class="card-label">Dropped</span></div>
                 </div>
                 <p class="hint cmp-bits" id="cmp-bits"></p>
+                <p class="hint cmp-sharp" id="cmp-sharp"></p>
                 <p id="cmp-mismatch" class="error" hidden></p>
                 <div class="chart-container">
                     <canvas id="sim-chart"></canvas>
