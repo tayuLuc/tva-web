@@ -1,0 +1,44 @@
+:root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e4e4e7;
+    --muted: #8b8d97;
+    --accent: #6366f1;
+    --red: #ef4444;
+    --yellow: #eab308;
+    --green: #22c55e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; display: flex; flex-direction: column;
+}
+header { text-align: center; padding: 2rem 1rem 1rem; }
+header h1 { font-size: 1.8rem; font-weight: 700; }
+header h1 span { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+.subtitle { color: var(--muted); margin-top: 0.3rem; font-size: 0.9rem; }
+main { flex: 1; max-width: 960px; width: 100%; margin: 0 auto; padding: 1rem; }
+.drop-zone {
+    border: 2px dashed var(--border); border-radius: 12px;
+    padding: 3rem 2rem; text-align: center; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+.drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: rgba(99,102,241,0.05); }
+.drop-zone .browse { color: var(--accent); cursor: pointer; text-decoration: underline; }
+.drop-zone .hint { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }
+.progress-bar { height: 6px; background: var(--surface); border-radius: 3px; overflow: hidden; margin: 1.5rem 0 0.5rem; }
+.progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.15s; }
+#progress-text { color: var(--muted); font-size: 0.85rem; text-align: center; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin: 1.5rem 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; display: flex; flex-direction: column; gap: 0.25rem; }
+.card-value { font-size: 1.4rem; font-weight: 700; }
+.card-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; }
+.chart-container { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+details { margin: 1rem 0; }
+summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-size: 0.75rem; overflow-x: auto; max-height: 400px; overflow-y: auto; margin-top: 0.5rem; }
+.error { color: var(--red); text-align: center; padding: 2rem; }
+footer { text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.8rem; }
+footer a { color: var(--accent); }
