@@ -68,9 +68,97 @@ footer a { color: var(--accent); }
 }
 .compare-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ── Heatmap ── */
-.heatmap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-top: 0.75rem; }
-.heatmap-grid figure { margin: 0; text-align: center; }
-.heatmap-grid canvas { width: 100%; image-rendering: pixelated; border: 1px solid var(--border); border-radius: 6px; background: #000; }
-.heatmap-grid figcaption { color: var(--muted); font-size: 0.75rem; margin-top: 0.25rem; }
-#sim-chart { cursor: crosshair; }
+/* ── визуальное разделение: панели ── */
+:root { --panel: #14161e; }
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.panel-head { margin-bottom: 1rem; }
+.panel-title { font-size: 1.15rem; font-weight: 700; }
+.panel-sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; }
+
+/* ── глоссарий-подсказка ── */
+.glossary { margin-bottom: 1rem; }
+.glossary summary { cursor: pointer; color: var(--accent); font-size: 0.85rem; }
+.glossary ul { margin: 0.6rem 0 0 1.1rem; color: var(--muted); font-size: 0.82rem; line-height: 1.5; }
+.glossary b { color: var(--text); }
+
+/* ── легенды под графиками ── */
+.legend { color: var(--muted); font-size: 0.78rem; margin-top: 0.6rem; line-height: 1.4; }
+
+/* ── тултипы на карточках ── */
+.card[data-tip] { position: relative; cursor: help; }
+.card[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; left: 50%; bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    width: max-content; max-width: 220px;
+    background: #000; color: #fff; border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.5rem 0.6rem;
+    font-size: 0.72rem; line-height: 1.35; text-transform: none; font-weight: 400;
+    text-align: left; white-space: normal;
+    z-index: 30; pointer-events: none;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+}
+.card[data-tip]:hover::before {
+    content: ""; position: absolute; left: 50%; bottom: calc(100% + 2px);
+    transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: #000; z-index: 30;
+}
+
+/* ── before/after слайдер (A поверх B) ── */
+.ba-slider {
+    position: relative; width: 100%; border-radius: 8px;
+    overflow: hidden; border: 1px solid var(--border);
+    cursor: ew-resize; user-select: none; touch-action: none;
+    margin-top: 0.75rem;
+}
+.ba-slider canvas { width: 100%; height: auto; display: block; }
+.ba-slider .ba-top {
+    position: absolute; inset: 0;
+    clip-path: inset(0 0 0 var(--pos, 50%));
+}
+.ba-handle {
+    position: absolute; top: 0; bottom: 0; left: var(--pos, 50%);
+    width: 2px; background: #fff; transform: translateX(-1px);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
+}
+.ba-handle::after {
+    content: "\21C6"; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; color: #000; font-size: 13px;
+    display: grid; place-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+.ba-tag {
+    position: absolute; top: 8px; padding: 2px 8px; border-radius: 4px;
+    background: rgba(0,0,0,0.6); color: #fff; font-size: 0.72rem; font-weight: 700;
+    pointer-events: none;
+}
+.ba-tag-a { left: 8px; }
+.ba-tag-b { right: 8px; }
+.ba-hint { text-align: center; margin-top: 0.4rem; }
+
+/* ── Δ heatmap отдельным блоком ── */
+.diff-figure { margin: 1rem 0 0; text-align: center; }
+.diff-figure canvas {
+    width: 100%; image-rendering: pixelated; cursor: zoom-in;
+    border: 1px solid var(--border); border-radius: 8px; background: #000;
+}
+.diff-figure figcaption { color: var(--muted); font-size: 0.75rem; margin-top: 0.3rem; }
+
+/* ── lightbox ── */
+#lightbox {
+    position: fixed; inset: 0; z-index: 100;
+    display: grid; place-items: center;
+}
+#lightbox[hidden] { display: none; }
+.lb-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.85); cursor: zoom-out; }
+.lb-figure { position: relative; margin: 0; max-width: 92vw; max-height: 92vh; text-align: center; }
+.lb-figure img { max-width: 92vw; max-height: 86vh; image-rendering: pixelated; border-radius: 8px; }
+.lb-figure figcaption { color: #fff; font-size: 0.85rem; margin-top: 0.5rem; }

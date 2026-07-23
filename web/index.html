@@ -13,35 +13,66 @@
         <p class="subtitle">Frame-level video analysis in your browser. No upload, no server.</p>
     </header>
     <main>
-        <section id="drop-zone" class="drop-zone">
-            <p>Drop a video file here or <label for="file-input" class="browse">browse</label></p>
-            <p class="hint">MP4 / WebM · ≤ 10 seconds · downscaled to 360p</p>
-            <input type="file" id="file-input" accept="video/mp4,video/webm" hidden>
-            <button id="sample-btn" class="sample-btn">▶ Try sample (3 sec, synthetic)</button>
-        </section>
+        <!-- глобальные индикаторы (видны обоим режимам) -->
         <section id="progress-section" hidden>
             <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
             <p id="progress-text">Extracting frames…</p>
         </section>
-        <section id="results" hidden>
-            <div class="cards">
-                <div class="card"><span class="card-value" id="stat-fps">—</span><span class="card-label">Avg FPS</span></div>
-                <div class="card"><span class="card-value" id="stat-1low">—</span><span class="card-label">1% Low</span></div>
-                <div class="card"><span class="card-value" id="stat-unique">—</span><span class="card-label">Unique</span></div>
-                <div class="card"><span class="card-value" id="stat-dupes">—</span><span class="card-label">Duplicates</span></div>
-                <div class="card"><span class="card-value" id="stat-tears">—</span><span class="card-label">Tears</span></div>
-                <div class="card"><span class="card-value" id="stat-p99">—</span><span class="card-label">P99 ms</span></div>
-            </div>
-            <div class="chart-container"><canvas id="fps-chart"></canvas></div>
-            <div class="chart-container"><canvas id="timeline-chart"></canvas></div>
-            <details><summary>Raw JSON Report</summary><pre id="raw-json"></pre></details>
-        </section>
         <section id="error-section" hidden><p class="error" id="error-text"></p></section>
 
-        <!-- ── Compare two versions (case A) ── -->
-        <section id="compare-section">
-            <h2 class="section-title">Compare two versions</h2>
-            <p class="hint">Original vs. re-encoded (e.g. after a social upload). Both downscaled to 360p in-browser; exact comparison via CLI.</p>
+        <!-- ═══════════ PANEL 1: single clip ═══════════ -->
+        <section class="panel">
+            <div class="panel-head">
+                <h2 class="panel-title">1 · Analyze a single clip</h2>
+                <p class="panel-sub">FPS, duplicate frames and tears — computed in your browser, nothing uploaded.</p>
+            </div>
+
+            <details class="glossary">
+                <summary>How to read these numbers</summary>
+                <ul>
+                    <li><b>Avg FPS</b> — mean count of <i>unique</i> frames per second.</li>
+                    <li><b>1% Low</b> — average FPS of the worst 1% of frames; the stutter indicator.</li>
+                    <li><b>Unique / Duplicates</b> — distinct frames vs. frames that just repeated the previous one.</li>
+                    <li><b>Tears</b> — horizontal frame tears (top from one frame, bottom from the next).</li>
+                    <li><b>P99 ms</b> — 99% of frames were shown faster than this frametime.</li>
+                </ul>
+            </details>
+
+            <section id="drop-zone" class="drop-zone">
+                <p>Drop a video file here or <label for="file-input" class="browse">browse</label></p>
+                <p class="hint">MP4 / WebM · ≤ 10 seconds · downscaled to 360p</p>
+                <input type="file" id="file-input" accept="video/mp4,video/webm" hidden>
+                <button id="sample-btn" class="sample-btn">▶ Try sample (3 sec, synthetic)</button>
+            </section>
+
+            <section id="results" hidden>
+                <div class="cards">
+                    <div class="card" data-tip="Mean unique frames per second across the clip."><span class="card-value" id="stat-fps">—</span><span class="card-label">Avg FPS</span></div>
+                    <div class="card" data-tip="Average FPS of the worst 1% of frames — the stutter indicator."><span class="card-value" id="stat-1low">—</span><span class="card-label">1% Low</span></div>
+                    <div class="card" data-tip="Distinct frames, with duplicates collapsed."><span class="card-value" id="stat-unique">—</span><span class="card-label">Unique</span></div>
+                    <div class="card" data-tip="Container frames that just repeated the previous unique frame."><span class="card-value" id="stat-dupes">—</span><span class="card-label">Duplicates</span></div>
+                    <div class="card" data-tip="Horizontal frame tears detected."><span class="card-value" id="stat-tears">—</span><span class="card-label">Tears</span></div>
+                    <div class="card" data-tip="99% of frames rendered faster than this frametime."><span class="card-value" id="stat-p99">—</span><span class="card-label">P99 ms</span></div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="fps-chart"></canvas>
+                    <p class="legend">Solid line = smoothed FPS, faint line = raw. Dips = stutters or duplicate-heavy moments.</p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="timeline-chart"></canvas>
+                    <p class="legend">Green = unique frame, red = duplicate (held longer). A tall red bar = one frame shown many times.</p>
+                </div>
+                <details><summary>Raw JSON Report</summary><pre id="raw-json"></pre></details>
+            </section>
+        </section>
+
+        <!-- ═══════════ PANEL 2: compare ═══════════ -->
+        <section class="panel" id="compare-section">
+            <div class="panel-head">
+                <h2 class="panel-title">2 · Compare two versions</h2>
+                <p class="panel-sub">Original vs. re-encoded (e.g. after a social upload). Both downscaled to 360p in-browser; for exact per-frame math use the CLI.</p>
+            </div>
+
             <div class="compare-grid">
                 <div id="drop-a" class="drop-zone small">
                     <p><b>A</b> — original<br><span class="slot-name" id="name-a">drop / browse</span></p>
@@ -62,29 +93,53 @@
                 </label>
                 <button id="compare-btn" class="sample-btn" disabled>Compare A vs B</button>
             </div>
-        </section>
 
-        <section id="compare-results" hidden>
-            <div class="cards">
-                <div class="card"><span class="card-value" id="cmp-drop">—</span><span class="card-label">Quality drop %</span></div>
-                <div class="card"><span class="card-value" id="cmp-mean">—</span><span class="card-label">Mean similarity</span></div>
-                <div class="card"><span class="card-value" id="cmp-min">—</span><span class="card-label">Worst frame</span></div>
-                <div class="card"><span class="card-value" id="cmp-pairs">—</span><span class="card-label">Pairs</span></div>
-                <div class="card"><span class="card-value" id="cmp-dropped">—</span><span class="card-label">Dropped</span></div>
-            </div>
-            <p id="cmp-mismatch" class="error" hidden></p>
-            <div class="chart-container"><canvas id="sim-chart"></canvas></div>
-
-            <div id="heatmap-panel" hidden>
-                <p class="hint" id="heatmap-hint">Click a dip in the chart to inspect that pair.</p>
-                <div class="heatmap-grid">
-                    <figure><canvas id="hm-a"></canvas><figcaption>A (original)</figcaption></figure>
-                    <figure><canvas id="hm-b"></canvas><figcaption>B (compressed)</figcaption></figure>
-                    <figure><canvas id="hm-diff"></canvas><figcaption>Δ heatmap</figcaption></figure>
+            <section id="compare-results" hidden>
+                <div class="cards">
+                    <div class="card" data-tip="Estimated quality lost to re-encoding. 0 = identical."><span class="card-value" id="cmp-drop">—</span><span class="card-label">Quality drop %</span></div>
+                    <div class="card" data-tip="Average per-frame similarity, 1 = identical."><span class="card-value" id="cmp-mean">—</span><span class="card-label">Mean similarity</span></div>
+                    <div class="card" data-tip="Lowest-similarity matched pair in the clip."><span class="card-value" id="cmp-min">—</span><span class="card-label">Worst frame</span></div>
+                    <div class="card" data-tip="Frame pairs matched by timestamp."><span class="card-value" id="cmp-pairs">—</span><span class="card-label">Pairs</span></div>
+                    <div class="card" data-tip="Frames with no timestamp match in the other clip."><span class="card-value" id="cmp-dropped">—</span><span class="card-label">Dropped</span></div>
                 </div>
-                <p class="hint" id="heatmap-meta"></p>
-            </div>
+                <p id="cmp-mismatch" class="error" hidden></p>
+                <div class="chart-container">
+                    <canvas id="sim-chart"></canvas>
+                    <p class="legend">One point per matched pair. Dips = where re-compression damaged detail — usually motion or dark areas. Click a dip to inspect that pair below.</p>
+                </div>
+
+                <div id="heatmap-panel" hidden>
+                    <p class="hint" id="heatmap-hint">Click a dip in the chart to inspect that pair.</p>
+
+                    <!-- A/B как один блок со слайдером -->
+                    <div class="ba-slider zoomable" id="ba-slider">
+                        <canvas id="hm-a"></canvas>
+                        <canvas id="hm-b" class="ba-top"></canvas>
+                        <div class="ba-handle" id="ba-handle"></div>
+                        <span class="ba-tag ba-tag-a">A</span>
+                        <span class="ba-tag ba-tag-b">B</span>
+                    </div>
+                    <p class="hint ba-hint">Drag the handle to compare · click a side to enlarge</p>
+
+                    <!-- Δ отдельно -->
+                    <figure class="diff-figure">
+                        <canvas id="hm-diff" class="zoomable"></canvas>
+                        <figcaption>Δ heatmap — click to enlarge</figcaption>
+                    </figure>
+
+                    <p class="hint" id="heatmap-meta"></p>
+                </div>
+            </section>
         </section>
+
+        <!-- lightbox -->
+        <div id="lightbox" hidden>
+            <div class="lb-backdrop" data-close></div>
+            <figure class="lb-figure">
+                <img id="lb-img" alt="">
+                <figcaption id="lb-cap"></figcaption>
+            </figure>
+        </div>
     </main>
     <footer>
         <p>Powered by <a href="https://github.com/tayuLuc/tva">tva-core</a> (Rust → WASM) ·

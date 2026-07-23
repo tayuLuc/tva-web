@@ -356,6 +356,7 @@ async function seekHeat(idx) {
 
         const gray = diff_heatmap_wasm(rgbA, rgbB);
         drawGray(document.getElementById("hm-diff"), gray, width, height);
+        document.getElementById("ba-slider").style.setProperty("--pos", "50%");
 
         document.getElementById("heatmap-meta").textContent =
             "Note: browser seek lands on the nearest decodable frame, so the pair may differ by ±1 frame from the analysis pass — fine for locating *where* quality dropped, not for exact frame math.";
@@ -408,3 +409,53 @@ function drawGray(canvas, gray, w, h) {
     }
     ctx.putImageData(img, 0, 0);
 }
+
+// ── Before/After slider (drag) + click-to-enlarge ──
+(function initSlider() {
+    const slider = document.getElementById("ba-slider");
+    if (!slider) return;
+    let down = false, moved = 0, lastX = 0;
+
+    const posFromX = (clientX) => {
+        const r = slider.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(100, ((clientX - r.left) / r.width) * 100));
+        slider.style.setProperty("--pos", pct + "%");
+        return pct;
+    };
+
+    slider.addEventListener("pointerdown", (e) => {
+        down = true; moved = 0; lastX = e.clientX;
+        slider.setPointerCapture(e.pointerId);
+    });
+    slider.addEventListener("pointermove", (e) => {
+        if (!down) return;
+        moved += Math.abs(e.clientX - lastX); lastX = e.clientX;
+        posFromX(e.clientX);
+    });
+    slider.addEventListener("pointerup", (e) => {
+        if (!down) return;
+        down = false;
+        if (moved < 6) {
+            const r = slider.getBoundingClientRect();
+            const side = (e.clientX - r.left) < r.width / 2 ? "hm-a" : "hm-b";
+            openLightbox(side, side === "hm-a" ? "A — original" : "B — compressed");
+        }
+    });
+})();
+
+// ── Lightbox (enlarge on click) ──
+function openLightbox(canvasId, caption) {
+    const c = document.getElementById(canvasId);
+    if (!c) return;
+    document.getElementById("lb-img").src = c.toDataURL();
+    document.getElementById("lb-cap").textContent = caption;
+    document.getElementById("lightbox").hidden = false;
+}
+function closeLightbox() { document.getElementById("lightbox").hidden = true; }
+
+document.getElementById("lightbox").addEventListener("click", (e) => {
+    if (e.target.dataset.close !== undefined || e.target.id === "lightbox") closeLightbox();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLightbox(); });
+
+document.getElementById("hm-diff").addEventListener("click", () => openLightbox("hm-diff", "Δ heatmap"));
