@@ -204,3 +204,13 @@ pub fn compare_frames_wasm(
         Err(e) => err_json(&e.to_string()),
     }
 }
+
+// ── Heatmap (case A inspection) ──
+
+use tva_core::degradation::diff_heatmap;
+
+/// Grayscale per-pixel difference map for one frame pair.
+#[wasm_bindgen]
+pub fn diff_heatmap_wasm(a: Vec<u8>, b: Vec<u8>) -> Vec<u8> {
+    diff_heatmap(&a, &b)
+}

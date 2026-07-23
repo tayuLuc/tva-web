@@ -74,6 +74,16 @@
             </div>
             <p id="cmp-mismatch" class="error" hidden></p>
             <div class="chart-container"><canvas id="sim-chart"></canvas></div>
+
+            <div id="heatmap-panel" hidden>
+                <p class="hint" id="heatmap-hint">Click a dip in the chart to inspect that pair.</p>
+                <div class="heatmap-grid">
+                    <figure><canvas id="hm-a"></canvas><figcaption>A (original)</figcaption></figure>
+                    <figure><canvas id="hm-b"></canvas><figcaption>B (compressed)</figcaption></figure>
+                    <figure><canvas id="hm-diff"></canvas><figcaption>Δ heatmap</figcaption></figure>
+                </div>
+                <p class="hint" id="heatmap-meta"></p>
+            </div>
         </section>
     </main>
     <footer>

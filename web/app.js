@@ -1,4 +1,4 @@
-import init, { TvaSession, version, compare_frames_wasm } from "./pkg/tva_wasm.js";
+import init, { TvaSession, version, compare_frames_wasm, diff_heatmap_wasm } from "./pkg/tva_wasm.js";
 
 const MAX_DURATION_S = 10;
 const TARGET_HEIGHT = 360;
@@ -183,6 +183,7 @@ function hslToRgb(h, s, l) {
 
 // ── Compare (case A) ──
 let fileA = null, fileB = null, simChart = null;
+let lastReport = null, lastDims = null;
 
 function wireSlot(letter) {
     const zone = document.getElementById(`drop-${letter}`);
@@ -272,6 +273,9 @@ async function runCompare() {
         const report = JSON.parse(json);
         if (report.error) { showError(`Compare error: ${report.error}`); return; }
 
+        lastReport = report;
+        lastDims = { width: a.width, height: a.height };
+
         document.getElementById("progress-fill").style.width = "100%";
         document.getElementById("progress-text").textContent = "Done";
         renderCompare(report);
@@ -298,6 +302,7 @@ function renderCompare(r) {
     } else {
         mm.hidden = true;
     }
+    document.getElementById("heatmap-panel").hidden = !!r.size_mismatch;
 
     const ctx = document.getElementById("sim-chart").getContext("2d");
     if (simChart) simChart.destroy();
@@ -321,8 +326,85 @@ function renderCompare(r) {
                 x: { title: { display: true, text: "seconds", color: "#8b8d97" }, ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } },
                 y: { min: 0, max: 1, title: { display: true, text: "similarity", color: "#8b8d97" }, ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } },
             },
+            onClick: (evt) => {
+                const els = simChart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
+                if (els.length) seekHeat(els[0].index);
+            },
         },
     });
 
     document.getElementById("compare-results").hidden = false;
+}
+
+// ── Heatmap on click: re-seek both videos to the pair's timestamp ──
+async function seekHeat(idx) {
+    if (!lastReport || !lastDims || !fileA || !fileB) return;
+    const point = lastReport.profile[idx];
+    if (!point) return;
+    const t = point.timestamp_ms / 1000;
+    const { width, height } = lastDims;
+
+    document.getElementById("heatmap-hint").textContent =
+        `t = ${t.toFixed(2)}s · similarity ${point.similarity.toFixed(3)} · diff pixels ${(point.diff_pixel_ratio * 100).toFixed(1)}%`;
+
+    try {
+        const rgbA = await grabFrame(fileA, t, width, height);
+        const rgbB = await grabFrame(fileB, t, width, height);
+
+        drawRgb(document.getElementById("hm-a"), rgbA, width, height);
+        drawRgb(document.getElementById("hm-b"), rgbB, width, height);
+
+        const gray = diff_heatmap_wasm(rgbA, rgbB);
+        drawGray(document.getElementById("hm-diff"), gray, width, height);
+
+        document.getElementById("heatmap-meta").textContent =
+            "Note: browser seek lands on the nearest decodable frame, so the pair may differ by ±1 frame from the analysis pass — fine for locating *where* quality dropped, not for exact frame math.";
+    } catch (e) {
+        document.getElementById("heatmap-meta").textContent = `heatmap failed: ${e.message || e}`;
+    }
+}
+
+function grabFrame(file, t, width, height) {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement("video");
+        video.muted = true; video.playsInline = true; video.preload = "auto";
+        const url = URL.createObjectURL(file);
+        video.src = url;
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+        video.onloadeddata = () => { video.currentTime = Math.min(t, video.duration); };
+        video.onseeked = () => {
+            ctx.drawImage(video, 0, 0, width, height);
+            const src = ctx.getImageData(0, 0, width, height).data;
+            const rgb = new Uint8Array(width * height * 3);
+            for (let j = 0, k = 0; j < src.length; j += 4, k += 3) {
+                rgb[k] = src[j]; rgb[k + 1] = src[j + 1]; rgb[k + 2] = src[j + 2];
+            }
+            URL.revokeObjectURL(url);
+            resolve(rgb);
+        };
+        video.onerror = () => { URL.revokeObjectURL(url); reject(new Error("seek failed")); };
+    });
+}
+
+function drawRgb(canvas, rgb, w, h) {
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    const img = ctx.createImageData(w, h);
+    for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) {
+        img.data[j] = rgb[i]; img.data[j + 1] = rgb[i + 1]; img.data[j + 2] = rgb[i + 2]; img.data[j + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+}
+
+function drawGray(canvas, gray, w, h) {
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    const img = ctx.createImageData(w, h);
+    for (let i = 0, j = 0; i < gray.length; i++, j += 4) {
+        img.data[j] = img.data[j + 1] = img.data[j + 2] = gray[i]; img.data[j + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
 }
