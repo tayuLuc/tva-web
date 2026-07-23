@@ -128,3 +128,62 @@ function setProgress(pct, text) { document.getElementById("progress-fill").style
 function hideProgress() { document.getElementById("progress-section").hidden = true; }
 function showError(msg) { document.getElementById("error-text").textContent = msg; document.getElementById("error-section").hidden = false; }
 function hideError() { document.getElementById("error-section").hidden = true; }
+
+// ── Sample: synthetic frames with known duplicates ──
+document.getElementById("sample-btn").addEventListener("click", runSample);
+
+function runSample() {
+    hideError();
+    document.getElementById("results").hidden = true;
+    showProgress("Generating sample…");
+
+    const width = 320, height = 240, fps = 30, totalFrames = 90;
+    const frameSize = width * height * 3;
+    const rgbData = new Uint8Array(totalFrames * frameSize);
+
+    for (let i = 0; i < totalFrames; i++) {
+        const isDupe = i > 0 && i % 3 === 0;
+        const ui = isDupe ? i - 1 : i;
+        const [r, g, b] = hslToRgb((ui * 4 % 360) / 360, 0.7, 0.5);
+        const off = i * frameSize;
+        for (let p = 0; p < width * height; p++) {
+            rgbData[off + p * 3] = r;
+            rgbData[off + p * 3 + 1] = g;
+            rgbData[off + p * 3 + 2] = b;
+        }
+        setProgress(Math.round((i / totalFrames) * 50), `Frame ${i + 1}/${totalFrames}`);
+    }
+
+    setProgress(60, "Analyzing…");
+    setTimeout(() => {
+        try {
+            const jsonStr = analyze_frames(rgbData, width, height, totalFrames, fps, 0.98);
+            const report = JSON.parse(jsonStr);
+            if (report.error) { showError(`Analysis error: ${report.error}`); return; }
+            setProgress(100, "Done");
+            renderResults(report);
+        } catch (e) { showError(`Failed: ${e.message || e}`); }
+        finally { setTimeout(() => hideProgress(), 500); }
+    }, 50);
+}
+
+function hslToRgb(h, s, l) {
+    let r, g, b;
+    if (s === 0) { r = g = b = l * 255; }
+    else {
+        const hue2rgb = (p, q, t) => {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1/6) return p + (q - p) * 6 * t;
+            if (t < 1/2) return q;
+            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+            return p;
+        };
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1/3) * 255;
+        g = hue2rgb(p, q, h) * 255;
+        b = hue2rgb(p, q, h - 1/3) * 255;
+    }
+    return [Math.round(r), Math.round(g), Math.round(b)];
+}

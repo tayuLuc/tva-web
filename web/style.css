@@ -40,5 +40,17 @@ details { margin: 1rem 0; }
 summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
 pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-size: 0.75rem; overflow-x: auto; max-height: 400px; overflow-y: auto; margin-top: 0.5rem; }
 .error { color: var(--red); text-align: center; padding: 2rem; }
+.sample-btn {
+    margin-top: 1rem;
+    padding: 0.5rem 1.5rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+.sample-btn:hover { opacity: 0.85; }
 footer { text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.8rem; }
 footer a { color: var(--accent); }
