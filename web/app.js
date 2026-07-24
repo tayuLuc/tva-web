@@ -1,4 +1,5 @@
 import init, { TvaSession, CompareSession, version, compare_frames_wasm, diff_heatmap_wasm } from "./pkg/tva_wasm.js";
+import { decodeVideo } from "./decode.js";
 
 const MAX_DURATION_S = 10;
 const TARGET_HEIGHT = 360;
@@ -59,31 +60,27 @@ function rgbaToRgb(src, dst, dstOff) {
 }
 
 async function analyzeWithSession(file) {
+    // Probe dimensions via video element (fast metadata only, no decode)
     const video = await loadVideo(file);
     const { frameCount, width, height } = videoDims(video);
-    const fps = EXTRACT_FPS;
+    URL.revokeObjectURL(video.src);
 
-    const canvas = document.createElement("canvas");
-    canvas.width = width; canvas.height = height;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    showProgress("Decoding via libav.js…");
+    const session = new TvaSession(width, height, EXTRACT_FPS, 0.98);
 
-    const session = new TvaSession(width, height, fps, 0.98);
-
-    for (let i = 0; i < frameCount; i++) {
-        video.currentTime = i / fps;
-        await new Promise((r) => { video.onseeked = r; });
-        ctx.drawImage(video, 0, 0, width, height);
-        const imgData = ctx.getImageData(0, 0, width, height);
-        const rgba = imgData.data;
-
-        const rgb = new Uint8Array(width * height * 3);
-        rgbaToRgb(rgba, rgb);
-
-        session.push_frame(rgb);
-        setProgress(Math.round((i / frameCount) * 95), `Frame ${i + 1}/${frameCount}`);
+    let i = 0;
+    for await (const fr of decodeVideo(file, {
+        targetW: width, targetH: height,
+        maxSeconds: MAX_DURATION_S,
+        onProgress: (idx, pts) => setProgress(
+            Math.min(95, (idx / Math.max(1, frameCount)) * 95),
+            `Frame ${idx} · t=${(pts/1000).toFixed(2)}s`,
+        ),
+    })) {
+        session.push_frame_pts(fr.rgb, fr.pts_ms);
+        i++;
     }
 
-    URL.revokeObjectURL(video.src);
     setProgress(99, "Finalizing…");
     const jsonStr = session.finish();
     const report = JSON.parse(jsonStr);
@@ -91,8 +88,7 @@ async function analyzeWithSession(file) {
     setProgress(100, "Done");
     renderResults(report);
     setTimeout(() => hideProgress(), 500);
-
-    return { width, height, fps };
+    return { width, height, fps: EXTRACT_FPS };
 }
 
 function runSample() {

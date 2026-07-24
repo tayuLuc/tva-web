@@ -52,13 +52,15 @@ impl TvaSession {
         }
     }
 
-    pub fn push_frame(&mut self, rgb: Vec<u8>) -> Result<(), JsValue> {
+    /// Push one frame with an external timestamp (e.g. from libav PTS).
+    /// Used by the decoder-based analysis path.
+    pub fn push_frame_pts(&mut self, rgb: Vec<u8>, pts_ms: f64) -> Result<(), JsValue> {
         let buf = PixelBuffer::new(rgb, self.width, self.height)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let frame = Frame {
             data: buf,
             index: self.index,
-            timestamp_ms: self.index as f64 / self.fps * 1000.0,
+            timestamp_ms: pts_ms,
         };
 
         if let Some(dup) = self
@@ -96,6 +98,13 @@ impl TvaSession {
         self.prev = Some(frame.data);
         self.index += 1;
         Ok(())
+    }
+
+    /// Push one frame with a uniform timestamp (Canvas-seek path, backwards compat).
+    /// Delegates to push_frame_pts.
+    pub fn push_frame(&mut self, rgb: Vec<u8>) -> Result<(), JsValue> {
+        let pts_ms = self.index as f64 / self.fps * 1000.0;
+        self.push_frame_pts(rgb, pts_ms)
     }
 
     pub fn finish(&mut self) -> String {
@@ -250,7 +259,8 @@ impl CompareSession {
         })
     }
 
-    pub fn push_pair(&mut self, a: &[u8], b: &[u8]) -> Result<(), JsValue> {
+    /// Push one pair with an external timestamp (decoder path).
+    pub fn push_pair_pts(&mut self, a: &[u8], b: &[u8], pts_ms: f64) -> Result<(), JsValue> {
         let buf_a = PixelBuffer::new(a.to_vec(), self.width, self.height)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let buf_b = PixelBuffer::new(b.to_vec(), self.width, self.height)
@@ -263,7 +273,6 @@ impl CompareSession {
         self.sum_sim += sim;
         if sim < self.min_sim { self.min_sim = sim; }
         self.compared += 1;
-        // Резкость границ (Laplacian) каждой стороны.
         let ga = rgb_to_gray(a);
         let sa = laplacian_sharpness(&ga, self.width as usize, self.height as usize);
         let gb = rgb_to_gray(b);
@@ -271,12 +280,19 @@ impl CompareSession {
         self.sum_sharp_a += sa;
         self.sum_sharp_b += sb;
         self.profile.push(DegradationPoint {
-            timestamp_ms: self.index as f64 / self.fps * 1000.0,
+            timestamp_ms: pts_ms,
             similarity: sim,
             diff_pixel_ratio: ratio,
         });
         self.index += 1;
         Ok(())
+    }
+
+    /// Push one pair with uniform timestamp (Canvas path, backwards compat).
+    /// Delegates to push_pair_pts.
+    pub fn push_pair(&mut self, a: &[u8], b: &[u8]) -> Result<(), JsValue> {
+        let pts_ms = self.index as f64 / self.fps * 1000.0;
+        self.push_pair_pts(a, b, pts_ms)
     }
 
     pub fn finish(&mut self) -> String {
