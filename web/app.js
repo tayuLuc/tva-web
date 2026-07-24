@@ -197,6 +197,12 @@ const crosshair = {
 function attachZoom(chart, fullMin, fullMax) {
     const wrap = chart.canvas.parentNode;
     wrap.querySelectorAll(".zoom-controls").forEach((n) => n.remove());
+    const canvas = chart.canvas;
+    if (canvas.__zoomAbort) canvas.__zoomAbort.abort();
+    const ac = new AbortController();
+    canvas.__zoomAbort = ac;
+    const sig = ac.signal;
+
     const range = Math.max(fullMax - fullMin, 1e-6);
     const ctl = document.createElement("div");
     ctl.className = "zoom-controls";
@@ -209,37 +215,40 @@ function attachZoom(chart, fullMin, fullMax) {
     const pIn = ctl.querySelector(".z-pos");
     ctl.querySelector(".z-reset").addEventListener("click", () => { zIn.value = 1; pIn.value = 500; apply(); });
 
-    function clampWin(min, max, win) {
+    const clampWin = (min, max, win) => {
         if (min < fullMin) { min = fullMin; max = fullMin + win; }
         if (max > fullMax) { max = fullMax; min = fullMax - win; }
         if (min < fullMin) min = fullMin;
         return [min, max];
-    }
+    };
     function apply() {
+        const live = Chart.getChart(canvas) || chart;
         const win = range / parseFloat(zIn.value);
         const center = fullMin + (parseFloat(pIn.value) / 1000) * range;
-        let [min, max] = clampWin(center - win / 2, center + win / 2, win);
-        chart.options.scales.x.min = min; chart.options.scales.x.max = max;
-        chart.update("none");
+        const [min, max] = clampWin(center - win / 2, center + win / 2, win);
+        live.options.scales.x.min = min; live.options.scales.x.max = max;
+        live.update("none");
     }
     zIn.addEventListener("input", apply);
     pIn.addEventListener("input", apply);
 
-    chart.canvas.addEventListener("wheel", (e) => {
+    canvas.addEventListener("wheel", (e) => {
         e.preventDefault();
-        const rect = chart.canvas.getBoundingClientRect();
+        const live = Chart.getChart(canvas);
+        if (!live || !live.canvas) return;
+        const rect = live.canvas.getBoundingClientRect();
         const px = e.clientX - rect.left;
-        const xVal = chart.scales.x.getValueForPixel(px);
-        const area = chart.chartArea;
+        const xVal = live.scales.x.getValueForPixel(px);
+        const area = live.chartArea;
         const frac = Math.max(0, Math.min(1, (px - area.left) / (area.right - area.left)));
         const newZ = Math.min(20, Math.max(1, parseFloat(zIn.value) * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
         const newWin = range / newZ;
-        let [min, max] = clampWin(xVal - frac * newWin, xVal - frac * newWin + newWin, newWin);
-        chart.options.scales.x.min = min; chart.options.scales.x.max = max;
+        const [min, max] = clampWin(xVal - frac * newWin, xVal - frac * newWin + newWin, newWin);
+        live.options.scales.x.min = min; live.options.scales.x.max = max;
         zIn.value = newZ;
         pIn.value = Math.round((((min + max) / 2 - fullMin) / range) * 1000);
-        chart.update("none");
-    }, { passive: false });
+        live.update("none");
+    }, { passive: false, signal: sig });
 
     apply();
 }
