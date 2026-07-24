@@ -17,7 +17,7 @@ function getLibAV() {
     libavPromise = new Promise((resolve, reject) => {
       const s = document.createElement("script");
       s.src = `${LIBAV_BASE}/libav-${LIBAV_VARIANT}.js`;
-      s.onload = () => resolve(globalThis.LibAV.LibAV());
+      s.onload = () => resolve(globalThis.LibAV.LibAV({ noworker: true }));
       s.onerror = () => reject(new Error("libav.js failed to load"));
       document.head.appendChild(s);
     });
