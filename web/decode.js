@@ -1,15 +1,14 @@
 // Decode video via libav.js → stream of RGB24 frames with real container PTS.
-// Variant: h264-aac-avf (H.264 + AAC, MP4, video filters).
-//   For other codecs swap to: vp8-opus-avf, vp9-opus-avf, av1-opus-avf, hevc-aac-avf.
+// Variant: webcodecs-avf (H.264, VP8, VP9, AV1 via browser-native WebCodecs).
+//   For other codecs just swap variant: vp8-opus-avf, webm, etc.
 //
 // Design: first decoded frame yields real dimensions → then init filter graph
 // with downscale + RGB24 conversion (native C, 4K never materialises in JS).
 // Remaining frames: decode+filter in one step via ff_decode_filter_multi.
 // Generator yields { rgb: Uint8Array(RGB24), pts_ms, width, height, index }.
 
-const LIBAV_VER = "6.0.7";
-const LIBAV_VARIANT = "h264-aac-avf";
-const LIBAV_BASE = `https://unpkg.com/libav.js@${LIBAV_VER}/dist`;
+const LIBAV_VARIANT = "webcodecs-avf";
+const LIBAV_BASE = "https://unpkg.com/libav.js@6.0.7/dist";
 
 let libavPromise = null;
 function getLibAV() {
@@ -17,7 +16,7 @@ function getLibAV() {
     globalThis.LibAV = { base: LIBAV_BASE };
     libavPromise = new Promise((resolve, reject) => {
       const s = document.createElement("script");
-      s.src = `${LIBAV_BASE}/libav-${LIBAV_VER}-${LIBAV_VARIANT}.js`;
+      s.src = `${LIBAV_BASE}/libav-${LIBAV_VARIANT}.js`;
       s.onload = () => resolve(globalThis.LibAV.LibAV());
       s.onerror = () => reject(new Error("libav.js failed to load"));
       document.head.appendChild(s);
