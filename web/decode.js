@@ -8,16 +8,20 @@
 // Generator yields { rgb: Uint8Array(RGB24), pts_ms, width, height, index }.
 
 const LIBAV_VARIANT = "webcodecs-avf";
-const LIBAV_BASE = "https://unpkg.com/libav.js@6.0.7/dist";
+const LIBAV_BASE = "./libav";
+let libavVariant = null; // set by loader
 
 let libavPromise = null;
 function getLibAV() {
   if (!libavPromise) {
-    globalThis.LibAV = { base: LIBAV_BASE };
+    globalThis.LibAV = { base: LIBAV_BASE + "/" };
     libavPromise = new Promise((resolve, reject) => {
       const s = document.createElement("script");
       s.src = `${LIBAV_BASE}/libav-${LIBAV_VARIANT}.js`;
-      s.onload = () => resolve(globalThis.LibAV.LibAV({ noworker: true }));
+      s.onload = () => {
+        // same-origin: let libav pick the best mode (Worker is fine)
+        resolve(globalThis.LibAV.LibAV());
+      };
       s.onerror = () => reject(new Error("libav.js failed to load"));
       document.head.appendChild(s);
     });
