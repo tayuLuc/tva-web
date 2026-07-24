@@ -31,6 +31,7 @@ main { flex: 1; max-width: 960px; width: 100%; margin: 0 auto; padding: 1rem; }
 .progress-bar { height: 6px; background: var(--surface); border-radius: 3px; overflow: hidden; margin: 1.5rem 0 0.5rem; }
 .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.15s; }
 #progress-text { color: var(--muted); font-size: 0.85rem; text-align: center; }
+.decode-path { font-style: italic; margin: 0 0 0.75rem; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin: 1.5rem 0; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; display: flex; flex-direction: column; gap: 0.25rem; }
 .card-value { font-size: 1.4rem; font-weight: 700; }

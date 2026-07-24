@@ -1,139 +1,90 @@
-// Decode video via libav.js → stream of RGB24 frames with real container PTS.
-// Variant: webcodecs-avf (H.264, VP8, VP9, AV1 via browser-native WebCodecs).
-//   For other codecs just swap variant: vp8-opus-avf, webm, etc.
+// Video → stream of RGB24 frames for tva-core sessions.
 //
-// Design: first decoded frame yields real dimensions → then init filter graph
-// with downscale + RGB24 conversion (native C, 4K never materialises in JS).
-// Remaining frames: decode+filter in one step via ff_decode_filter_multi.
-// Generator yields { rgb: Uint8Array(RGB24), pts_ms, width, height, index }.
+// ACTIVE path: browser seek (uniform 30 fps timestamps). Correct for every
+// metric tva computes (duplicates, tears, SSIM/MAD, Laplacian) on constant-rate
+// content; source PTS / VFR is the one thing it approximates.
+//
+// Planned but not shipped here:
+//   - WebCodecs decode (libav demux → VideoDecoder, honest source PTS/VFR):
+//     needs a probe/reopen streaming design validated in a real browser.
+//     The web/libav/ files stay as the demuxer for that step.
+//
+// Yields { rgb: Uint8Array(RGB24), pts_ms, width, height, index }.
+// Calls opts.onMeta({path, note}) once, when the path is chosen.
 
-const LIBAV_VARIANT = "webcodecs-avf";
-const LIBAV_BASE = "./libav";
-let libavVariant = null; // set by loader
+const EXTRACT_FPS = 30;
 
-let libavPromise = null;
-function getLibAV() {
-  if (!libavPromise) {
-    globalThis.LibAV = { base: LIBAV_BASE + "/" };
-    libavPromise = new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = `${LIBAV_BASE}/libav-${LIBAV_VARIANT}.js`;
-      s.onload = () => {
-        // same-origin: let libav pick the best mode (Worker is fine)
-        resolve(globalThis.LibAV.LibAV());
-      };
-      s.onerror = () => reject(new Error("libav.js failed to load"));
-      document.head.appendChild(s);
-    });
-  }
-  return libavPromise;
-}
+export async function* decodeVideo(file, opts = {}) {
+  const { targetH = 360, maxSeconds = 10, onProgress = () => {}, onMeta = () => {} } = opts;
 
-export async function* decodeVideo(file, { targetW, targetH, maxSeconds = 10, onProgress } = {}) {
-  const lib = await getLibAV();
-
-  // ── write file into libav's virtual FS ──
-  const name = "in_" + Math.random().toString(36).slice(2);
-  await lib.writeFile(name, new Uint8Array(await file.arrayBuffer()));
-
-  // ── demux ──
-  const [fmtCtx, streams] = await lib.ff_init_demuxer_file(name);
-  const vs = streams.find((s) => s.codec_type === lib.AVMEDIA_TYPE_VIDEO);
-  if (!vs) throw new Error("no video stream");
-
-  const tbNum = vs.time_base_num, tbDen = vs.time_base_den;
-  // ponytail: time_base ≈ 1/fps for CFR; for VFR it's avg, fallback only
-  const fallbackFps = tbDen / tbNum;
-
-  // ── init decoder with codecpar from stream ──
-  const [, c, pkt, frame] = await lib.ff_init_decoder(vs.codec_id, {
-    codecpar: vs.codecpar,
-    time_base: [tbNum, tbDen],
+  onMeta({
+    path: "seek",
+    note:
+      "browser seek → uniform 30 fps timestamps. Honest source PTS / VFR " +
+      "via libav-demux + WebCodecs is the planned next step.",
   });
 
-  // ── read + decode first batch to get real frame dimensions ──
-  let eof = false;
-  let [, packetsByStream] = await lib.ff_read_frame_multi(fmtCtx, pkt, { limit: 1 << 20 });
-  let videoPackets = packetsByStream[vs.index] || [];
-  if (!videoPackets.length) throw new Error("no video packets");
+  yield* seekDecode(file, { targetH, maxSeconds, onProgress });
+}
 
-  let decoded = await lib.ff_decode_multi(c, pkt, frame, videoPackets, { copyoutFrame: "video_packed" });
-  if (!decoded.length) throw new Error("first frame did not decode");
+async function* seekDecode(file, { targetH, maxSeconds, onProgress }) {
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  const url = URL.createObjectURL(file);
+  video.src = url;
 
-  // first frame yields real pix_fmt + dimensions after decode
-  const firstFrame = decoded[0];
-  const srcW = firstFrame.width, srcH = firstFrame.height;
-  const pixFmt = firstFrame.format;  // typically AV_PIX_FMT_YUV420P for H.264
-  const w = targetW || srcW, h = targetH || srcH;
+  let canvas, ctx;
+  try {
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = resolve;
+      video.onerror = () => reject(new Error("cannot load video metadata"));
+    });
 
-  // ── init filter graph: downscale + YUV→RGB24 ──
-  const [graph, src, sink] = await lib.ff_init_filter_graph(
-    `scale=${w}:${h},format=rgb24`,
-    {
-      width: srcW, height: srcH, pix_fmt: pixFmt,
-      time_base: [tbNum, tbDen],
-      frame_rate: fallbackFps,
-    },
-    {
-      width: w, height: h,
-      pix_fmt: lib.AV_PIX_FMT_RGB24,
-      time_base: [tbNum, tbDen],
-      frame_rate: fallbackFps,
-    },
-  );
+    const duration = Math.min(video.duration, maxSeconds);
+    const frameCount = Math.floor(duration * EXTRACT_FPS);
+    const scale = Math.min(1, targetH / video.videoHeight);
+    let width = Math.round(video.videoWidth * scale);
+    let height = Math.round(video.videoHeight * scale);
+    width += width & 1;
+    height += height & 1;
 
-  // ── filter helper ──
-  const maxPtsMs = maxSeconds * 1000;
-  let index = 0;
+    canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-  async function* pump(frames, startIdx) {
-    const rgb = await lib.ff_filter_multi(src, sink, frame, frames, { copyoutFrame: "video_packed" });
-    for (let i = 0; i < rgb.length; i++) {
-      const f = rgb[i];
-      // PTS: from RGB frame, fallback to decoded frame's PTS, fallback to counter
-      let ptsMs;
-      if (f.pts && f.pts > 0) {
-        ptsMs = f.pts * (tbNum / tbDen) * 1000;
-      } else if (frames[i] && frames[i].pts && frames[i].pts > 0) {
-        ptsMs = frames[i].pts * (tbNum / tbDen) * 1000;
-      } else {
-        ptsMs = (startIdx + i) / fallbackFps * 1000;
+    const rgb = new Uint8Array(width * height * 3);
+
+    for (let i = 0; i < frameCount; i++) {
+      video.currentTime = i / EXTRACT_FPS;
+      await new Promise((resolve, reject) => {
+        video.onseeked = resolve;
+        video.onerror = () => reject(new Error("seek failed"));
+      });
+      ctx.drawImage(video, 0, 0, width, height);
+
+      // pull RGBA pixels from canvas, convert to RGB in one loop
+      const src = ctx.getImageData(0, 0, width, height).data;
+      for (let j = 0, k = 0; j < src.length; j += 4, k += 3) {
+        rgb[k] = src[j];
+        rgb[k + 1] = src[j + 1];
+        rgb[k + 2] = src[j + 2];
       }
-      if (ptsMs > maxPtsMs) { eof = true; return; }
-      yield { rgb: f.data, pts_ms: ptsMs, width: w, height: h, index: startIdx + i };
-      if (onProgress) onProgress(startIdx + i, ptsMs);
+
+      yield {
+        rgb: rgb.slice(), // session copies anyway; slice is cheap insurance
+        pts_ms: (i / EXTRACT_FPS) * 1000,
+        width,
+        height,
+        index: i,
+      };
+      onProgress(i, (i / EXTRACT_FPS) * 1000);
     }
+  } finally {
+    URL.revokeObjectURL(url);
+    video.removeAttribute("src");
+    video.load();
   }
-
-  for await (const fr of pump(decoded, index)) { yield fr; index++; }
-
-  // ── decode + filter remaining ──
-  while (!eof) {
-    const [res, pktByStream] = await lib.ff_read_frame_multi(fmtCtx, pkt, { limit: 1 << 20 });
-    const pkts = pktByStream[vs.index] || [];
-    const isEof = res === lib.AVERROR_EOF;
-
-    if (pkts.length) {
-      const frames = await lib.ff_decode_filter_multi(
-        c, src, sink, pkt, frame, pkts,
-        { copyoutFrame: "video_packed" },
-      );
-      for await (const fr of pump(frames, index)) { yield fr; index++; }
-    }
-
-    if (isEof) {
-      // flush anything still in the decoder/filter
-      const fin = await lib.ff_decode_filter_multi(
-        c, src, sink, pkt, frame, [],
-        { fin: true, copyoutFrame: "video_packed" },
-      );
-      for await (const fr of pump(fin, index)) { yield fr; index++; }
-      eof = true;
-    }
-  }
-
-  // ── cleanup ──
-  try { await lib.ff_free_decoder(c, pkt, frame); } catch {}
-  try { await lib.avformat_close_input_js(fmtCtx); } catch {}
-  try { await lib.unlink(name); } catch {}
 }

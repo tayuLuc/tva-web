@@ -60,25 +60,25 @@ function rgbaToRgb(src, dst, dstOff) {
 }
 
 async function analyzeWithSession(file) {
-    // Probe dimensions via video element (fast metadata only, no decode)
     const video = await loadVideo(file);
-    const { frameCount, width, height } = videoDims(video);
+    const { width, height } = videoDims(video);
     URL.revokeObjectURL(video.src);
 
-    showProgress("Decoding via libav.js…");
     const session = new TvaSession(width, height, EXTRACT_FPS, 0.98);
+    let decodePath = null;
 
-    let i = 0;
+    showProgress("Extracting frames…");
     for await (const fr of decodeVideo(file, {
-        targetW: width, targetH: height,
+        targetH: TARGET_HEIGHT,
         maxSeconds: MAX_DURATION_S,
-        onProgress: (idx, pts) => setProgress(
-            Math.min(95, (idx / Math.max(1, frameCount)) * 95),
-            `Frame ${idx} · t=${(pts/1000).toFixed(2)}s`,
-        ),
+        onMeta: (m) => {
+            decodePath = m;
+            setProgress(undefined, m.path === "seek" ? "Extracting frames (browser seek)…" : m.path);
+        },
+        onProgress: (idx, pts) =>
+            setProgress(Math.min(95, (idx / 300) * 95), `Frame ${idx + 1} · t=${(pts / 1000).toFixed(2)}s`),
     })) {
         session.push_frame_pts(fr.rgb, fr.pts_ms);
-        i++;
     }
 
     setProgress(99, "Finalizing…");
@@ -86,9 +86,9 @@ async function analyzeWithSession(file) {
     const report = JSON.parse(jsonStr);
     if (report.error) { showError(`Analysis error: ${report.error}`); return; }
     setProgress(100, "Done");
-    renderResults(report);
+    renderResults(report, decodePath);
     setTimeout(() => hideProgress(), 500);
-    return { width, height, fps: EXTRACT_FPS };
+    return { width, height, fps: EXTRACT_FPS, path: decodePath };
 }
 
 function runSample() {
@@ -123,7 +123,16 @@ function runSample() {
     setTimeout(() => hideProgress(), 500);
 }
 
-function renderResults(report) {
+function renderResults(report, path) {
+    const dp = document.getElementById("decode-path");
+    if (dp) {
+        if (path && path.path) {
+            dp.hidden = false;
+            dp.textContent = `Decode: ${path.path}${path.note ? " — " + path.note : ""}`;
+        } else {
+            dp.hidden = true;
+        }
+    }
     const s = report.summary;
     document.getElementById("stat-fps").textContent = s.avg_fps.toFixed(1);
     document.getElementById("stat-1low").textContent = s.fps_1_low.toFixed(1);

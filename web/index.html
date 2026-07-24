@@ -46,6 +46,7 @@
             </section>
 
             <section id="results" hidden>
+                <p id="decode-path" class="hint decode-path" hidden></p>
                 <div class="cards">
                     <div class="card" data-tip="Mean unique frames per second across the clip."><span class="card-value" id="stat-fps">—</span><span class="card-label">Avg FPS</span></div>
                     <div class="card" data-tip="Average FPS of the worst 1% of frames — the stutter indicator."><span class="card-value" id="stat-1low">—</span><span class="card-label">1% Low</span></div>
@@ -152,11 +153,12 @@
                 <p class="panel-sub">This page is a quick-look vitrine. For the rest, use the CLI or the Tauri desktop GUI.</p>
             </div>
             <ul class="limits">
-                <li><b>Source FPS (e.g. "24 real of 60 container")</b> &mdash; not available: the browser&rsquo;s <code>&lt;video&gt;</code> hides the container frame rate; we extract a fixed 30. The CLI reads it via ffprobe.</li>
+                <li><b>Decode path</b> &mdash; browser seek at a fixed 30 fps. Every metric (duplicates, tears, SSIM/MAD, sharpness) is correct on this; the only thing approximated is the container&rsquo;s true frame rate / VFR.</li>
+                <li><b>Honest source PTS / VFR</b> &mdash; planned next step via libav demux + WebCodecs. Not shipped yet because a streaming WebCodecs path that can still fall back to seek needs a probe/reopen design that must be validated in a browser, not written blind. The bundled libav build is kept as the demuxer for it (it has no software video decoder, so a pure-libav decode is impossible here).</li>
                 <li><b>Native-resolution analysis</b> &mdash; the demo downscales (360p, or the smaller source in round-trip) to fit browser memory. Pixel-exact work on a 4K file is CLI/GUI only.</li>
-                <li><b>Clip length</b> &mdash; capped at 10s (seek-based extraction is slow, not a memory limit after the streaming rewrite).</li>
+                <li><b>Clip length</b> &mdash; capped at 10s (seek-based extraction is the slow part, not memory, after the streaming rewrite).</li>
                 <li><b>Overlay video export</b> &mdash; not in the browser; the CLI/Tauri render frames with the FPS overlay.</li>
-                <li><b>Effective bitrate</b> shown above is <code>filesize &divide; duration</code> of the downloaded file &mdash; a ranking proxy, not the host&rsquo;s true encoder bitrate.</li>
+                <li><b>Effective bitrate</b> shown in compare is <code>filesize &divide; duration</code> of the downloaded file &mdash; a ranking proxy, not the host&rsquo;s true encoder bitrate.</li>
             </ul>
             <p class="hint">Full analysis &rarr; <a href="https://github.com/tayuLuc/tva">tva (CLI)</a> &middot; desktop &rarr; <a href="https://github.com/tayuLuc/tva-gui">tva-gui (Tauri)</a>.</p>
         </section>
