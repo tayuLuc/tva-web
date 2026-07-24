@@ -7,6 +7,26 @@ const EXTRACT_FPS = 30;
 
 let fpsChart = null;
 let timelineChart = null;
+let analyzing = false, comparing = false;
+let lastCompareKey = null;
+const TAB_SEL = { 1: "#panel-1", 2: "#compare-section" };
+
+// ── tabs ──
+document.querySelectorAll(".tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+        const p = btn.dataset.panel;
+        document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b === btn));
+        Object.entries(TAB_SEL).forEach(([k, sel]) => {
+            document.querySelector(sel).hidden = k !== p;
+        });
+    });
+});
+document.querySelector("#compare-section").hidden = true;
+
+function setBusy(panel, on) {
+    const b = document.querySelector(`.tab[data-panel="${panel}"]`);
+    if (b) b.classList.toggle("busy", on);
+}
 
 async function initWasm() {
     await init();
@@ -16,7 +36,10 @@ initWasm().catch((e) => showError(`WASM init failed: ${e}`));
 
 const dropZone = document.getElementById("drop-zone");
 const fileInput = document.getElementById("file-input");
-dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("click", (e) => {
+    if (e.target.closest("button, label, input")) return;
+    fileInput.click();
+});
 fileInput.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
 dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
 dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
@@ -26,12 +49,15 @@ dropZone.addEventListener("drop", (e) => {
 });
 
 async function handleFile(file) {
+    if (analyzing) return;
     hideError();
     document.getElementById("results").hidden = true;
     showProgress("Loading video…");
+    analyzing = true; setBusy(1, true);
     try {
         const { width, height, fps } = await analyzeWithSession(file);
     } catch (e) { showError(`Failed: ${e.message || e}`); }
+    finally { analyzing = false; setBusy(1, false); }
 }
 
 function loadVideo(file) {
@@ -92,6 +118,9 @@ async function analyzeWithSession(file) {
 }
 
 function runSample() {
+    if (analyzing) return;
+    analyzing = true; setBusy(1, true);
+    document.getElementById("sample-btn").disabled = true;
     hideError();
     document.getElementById("results").hidden = true;
     showProgress("Generating…");
@@ -117,10 +146,12 @@ function runSample() {
     setProgress(95, "Finalizing…");
     const jsonStr = session.finish();
     const report = JSON.parse(jsonStr);
-    if (report.error) { showError(report.error); return; }
+    if (report.error) { showError(report.error); analyzing = false; setBusy(1, false); document.getElementById("sample-btn").disabled = false; return; }
     setProgress(100, "Done");
     renderResults(report);
     setTimeout(() => hideProgress(), 500);
+    analyzing = false; setBusy(1, false);
+    document.getElementById("sample-btn").disabled = false;
 }
 
 function renderResults(report, path) {
@@ -146,21 +177,99 @@ function renderResults(report, path) {
     document.getElementById("results").hidden = false;
 }
 
+// ── Crosshair plugin (vertical dashed line on hover) ──
+const crosshair = {
+    id: "crosshair",
+    afterDraw(chart) {
+        const act = chart.getActiveElements();
+        if (!act.length) return;
+        const x = act[0].element.x;
+        const { top, bottom } = chart.chartArea;
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom);
+        ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,255,255,0.25)";
+        ctx.setLineDash([4, 3]); ctx.stroke(); ctx.restore();
+    },
+};
+
+// ── Zoom + position sliders for linear-x charts ──
+function attachZoom(chart, fullMin, fullMax) {
+    const wrap = chart.canvas.parentNode;
+    wrap.querySelectorAll(".zoom-controls").forEach((n) => n.remove());
+    const range = Math.max(fullMax - fullMin, 1e-6);
+    const ctl = document.createElement("div");
+    ctl.className = "zoom-controls";
+    ctl.innerHTML =
+        `<label>Zoom <input type="range" class="z-zoom" min="1" max="20" step="0.1" value="1"></label>` +
+        `<label>Position <input type="range" class="z-pos" min="0" max="1000" step="1" value="500"></label>` +
+        `<button type="button" class="z-reset">Reset</button>`;
+    wrap.appendChild(ctl);
+    const zIn = ctl.querySelector(".z-zoom");
+    const pIn = ctl.querySelector(".z-pos");
+    ctl.querySelector(".z-reset").addEventListener("click", () => { zIn.value = 1; pIn.value = 500; apply(); });
+
+    function clampWin(min, max, win) {
+        if (min < fullMin) { min = fullMin; max = fullMin + win; }
+        if (max > fullMax) { max = fullMax; min = fullMax - win; }
+        if (min < fullMin) min = fullMin;
+        return [min, max];
+    }
+    function apply() {
+        const win = range / parseFloat(zIn.value);
+        const center = fullMin + (parseFloat(pIn.value) / 1000) * range;
+        let [min, max] = clampWin(center - win / 2, center + win / 2, win);
+        chart.options.scales.x.min = min; chart.options.scales.x.max = max;
+        chart.update("none");
+    }
+    zIn.addEventListener("input", apply);
+    pIn.addEventListener("input", apply);
+
+    chart.canvas.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const rect = chart.canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const xVal = chart.scales.x.getValueForPixel(px);
+        const area = chart.chartArea;
+        const frac = Math.max(0, Math.min(1, (px - area.left) / (area.right - area.left)));
+        const newZ = Math.min(20, Math.max(1, parseFloat(zIn.value) * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
+        const newWin = range / newZ;
+        let [min, max] = clampWin(xVal - frac * newWin, xVal - frac * newWin + newWin, newWin);
+        chart.options.scales.x.min = min; chart.options.scales.x.max = max;
+        zIn.value = newZ;
+        pIn.value = Math.round((((min + max) / 2 - fullMin) / range) * 1000);
+        chart.update("none");
+    }, { passive: false });
+
+    apply();
+}
+
 function renderFpsChart(report) {
     const ctx = document.getElementById("fps-chart").getContext("2d");
     if (fpsChart) fpsChart.destroy();
-    const labels = report.frames.map((f) => f.unique_frame);
+    const sm = report.fps_smoothed.length ? report.fps_smoothed : report.frames.map((f) => f.instantaneous_fps);
+    const maxI = report.frames.length ? report.frames[report.frames.length - 1].unique_frame : 0;
     fpsChart = new Chart(ctx, {
         type: "line",
         data: {
-            labels,
             datasets: [
-                { label: "FPS", data: report.frames.map((f) => f.instantaneous_fps), borderColor: "rgba(99,102,241,0.3)", borderWidth: 1, pointRadius: 0 },
-                { label: "Smoothed", data: report.fps_smoothed.length ? report.fps_smoothed : report.frames.map((f) => f.instantaneous_fps), borderColor: "#6366f1", borderWidth: 2, pointRadius: 0 },
+                { label: "FPS", data: report.frames.map((f) => ({ x: f.unique_frame, y: f.instantaneous_fps })), borderColor: "rgba(99,102,241,0.3)", borderWidth: 1, pointRadius: 0, pointHoverRadius: 4 },
+                { label: "Smoothed", data: report.frames.map((f, i) => ({ x: f.unique_frame, y: sm[i] })), borderColor: "#6366f1", borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
             ],
         },
-        options: { responsive: true, plugins: { title: { display: true, text: "FPS per unique frame", color: "#e4e4e7" }, legend: { labels: { color: "#8b8d97" } } }, scales: { x: { ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } }, y: { ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } } } },
+        options: {
+            responsive: true,
+            interaction: { mode: "index", intersect: false },
+            hover: { mode: "index", intersect: false },
+            plugins: { title: { display: true, text: "FPS per unique frame", color: "#e4e4e7" }, legend: { labels: { color: "#8b8d97" } } },
+            scales: {
+                x: { type: "linear", title: { display: true, text: "unique frame #", color: "#8b8d97" }, ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } },
+                y: { ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } },
+            },
+        },
+        plugins: [crosshair],
     });
+    attachZoom(fpsChart, 0, maxI);
 }
 
 function renderTimeline(report) {
@@ -171,7 +280,14 @@ function renderTimeline(report) {
     timelineChart = new Chart(ctx, {
         type: "bar",
         data: { labels, datasets: [{ label: "Streak", data: streaks, backgroundColor: streaks.map((s) => s > 1 ? "rgba(239,68,68,0.7)" : "rgba(34,197,94,0.5)") }] },
-        options: { responsive: true, plugins: { title: { display: true, text: "Timeline (red = duplicate)", color: "#e4e4e7" }, legend: { display: false } }, scales: { x: { ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } }, y: { ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } } } },
+        options: {
+            responsive: true,
+            interaction: { mode: "index", intersect: false },
+            hover: { mode: "index", intersect: false },
+            plugins: { title: { display: true, text: "Timeline (red = duplicate)", color: "#e4e4e7" }, legend: { display: false } },
+            scales: { x: { ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } }, y: { ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } } },
+        },
+        plugins: [crosshair],
     });
 }
 
@@ -181,7 +297,10 @@ function hideProgress() { document.getElementById("progress-section").hidden = t
 function showError(msg) { document.getElementById("error-text").textContent = msg; document.getElementById("error-section").hidden = false; }
 function hideError() { document.getElementById("error-section").hidden = true; }
 
-document.getElementById("sample-btn").addEventListener("click", runSample);
+document.getElementById("sample-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    runSample();
+});
 
 function hslToRgb(h, s, l) {
     let r, g, b;
@@ -245,8 +364,17 @@ async function extractFrames(file) {
 }
 
 async function runCompare() {
+    if (comparing) return;
+    const metric = document.getElementById("cmp-metric").value;
+    const key = [fileA, fileB, metric];
+    if (lastReport && lastCompareKey &&
+        lastCompareKey[0] === key[0] && lastCompareKey[1] === key[1] && lastCompareKey[2] === key[2]) {
+        return;
+    }
     hideError();
     document.getElementById("compare-results").hidden = true;
+    comparing = true; setBusy(2, true);
+    document.getElementById("compare-btn").disabled = true;
     try {
         document.getElementById("progress-section").hidden = false;
         document.getElementById("progress-fill").style.width = "0%";
@@ -261,7 +389,6 @@ async function runCompare() {
         document.getElementById("progress-text").textContent = "Comparing…";
         await new Promise((r) => setTimeout(r, 30));
 
-        const metric = document.getElementById("cmp-metric").value;
         const json = compare_frames_wasm(
             a.rgbData, a.width, a.height, a.fps, a.frameCount,
             b.rgbData, b.width, b.height, b.fps, b.frameCount,
@@ -272,6 +399,7 @@ async function runCompare() {
 
         lastReport = report;
         lastDims = { width: a.width, height: a.height };
+        lastCompareKey = key;
 
         document.getElementById("progress-fill").style.width = "100%";
         document.getElementById("progress-text").textContent = "Done";
@@ -279,6 +407,8 @@ async function runCompare() {
     } catch (e) {
         showError(`Compare failed: ${e.message || e}`);
     } finally {
+        comparing = false; setBusy(2, false);
+        document.getElementById("compare-btn").disabled = !(fileA && fileB);
         setTimeout(() => { document.getElementById("progress-section").hidden = true; }, 500);
     }
 }
@@ -301,36 +431,47 @@ function renderCompare(r) {
     }
     document.getElementById("heatmap-panel").hidden = !!r.size_mismatch;
 
+    const simData = r.profile.map((p) => ({ x: p.timestamp_ms / 1000, y: p.similarity }));
+    const maxSec = simData.length ? simData[simData.length - 1].x : 1;
     const ctx = document.getElementById("sim-chart").getContext("2d");
     if (simChart) simChart.destroy();
     simChart = new Chart(ctx, {
         type: "line",
         data: {
-            labels: r.profile.map((p) => (p.timestamp_ms / 1000).toFixed(1)),
             datasets: [{
                 label: "Similarity (1 = identical)",
-                data: r.profile.map((p) => p.similarity),
-                borderColor: "#6366f1", borderWidth: 2, pointRadius: 0, fill: false,
+                data: simData,
+                borderColor: "#6366f1", borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, fill: false,
             }],
         },
         options: {
             responsive: true,
+            interaction: { mode: "index", intersect: false },
+            hover: { mode: "index", intersect: false },
             plugins: {
                 title: { display: true, text: "Degradation over time (dips = where compression hit)", color: "#e4e4e7" },
                 legend: { labels: { color: "#8b8d97" } },
             },
             scales: {
-                x: { title: { display: true, text: "seconds", color: "#8b8d97" }, ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } },
+                x: { type: "linear", title: { display: true, text: "seconds", color: "#8b8d97" }, ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } },
                 y: { min: 0, max: 1, title: { display: true, text: "similarity", color: "#8b8d97" }, ticks: { color: "#8b8d97" }, grid: { color: "rgba(42,45,58,0.5)" } },
             },
-            onClick: (evt) => {
-                const els = simChart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
-                if (els.length) seekHeat(els[0].index);
-            },
+            onClick: (_evt, els) => { if (els.length) seekHeat(els[0].index); },
         },
+        plugins: [crosshair],
     });
+    attachZoom(simChart, 0, maxSec);
 
     document.getElementById("compare-results").hidden = false;
+
+    // auto-show worst pair
+    if (r.profile.length && !r.size_mismatch) {
+        let worst = 0;
+        for (let i = 1; i < r.profile.length; i++) {
+            if (r.profile[i].similarity < r.profile[worst].similarity) worst = i;
+        }
+        seekHeat(worst);
+    }
 }
 
 // ── Heatmap on click: re-seek both videos to the pair's timestamp ──
@@ -550,5 +691,8 @@ function updateMetricDesc(val) {
     el.innerHTML = `<b>${info.t}</b> \u2014 ${info.d}`;
 }
 const metricSel = document.getElementById("cmp-metric");
-metricSel.addEventListener("change", (e) => updateMetricDesc(e.target.value));
+metricSel.addEventListener("change", (e) => {
+    updateMetricDesc(e.target.value);
+    lastCompareKey = null;     // invalidate compare cache
+});
 updateMetricDesc(metricSel.value);

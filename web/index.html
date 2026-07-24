@@ -13,6 +13,12 @@
         <p class="subtitle">Frame-level video analysis in your browser. No upload, no server.</p>
     </header>
     <main>
+        <!-- табы: только две основные панели; limits всегда видна -->
+        <div class="tabs" role="tablist">
+            <button class="tab active" data-panel="1" role="tab">1 · Analyze a single clip</button>
+            <button class="tab" data-panel="2" role="tab">2 · Compare two versions</button>
+        </div>
+
         <!-- глобальные индикаторы (видны обоим режимам) -->
         <section id="progress-section" hidden>
             <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
@@ -21,7 +27,7 @@
         <section id="error-section" hidden><p class="error" id="error-text"></p></section>
 
         <!-- ═══════════ PANEL 1: single clip ═══════════ -->
-        <section class="panel">
+        <section class="panel" id="panel-1">
             <div class="panel-head">
                 <h2 class="panel-title">1 · Analyze a single clip</h2>
                 <p class="panel-sub">FPS, duplicate frames and tears — computed in your browser, nothing uploaded.</p>

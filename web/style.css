@@ -191,3 +191,37 @@ footer a { color: var(--accent); }
 .limits b { color: var(--text); }
 .limits code { color: var(--accent); font-size: 0.78rem; }
 .limits-panel a { color: var(--accent); }
+
+/* ── табы ── */
+.tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }
+.tab {
+    flex: 1; padding: .7rem 1rem; text-align: left; cursor: pointer; position: relative;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--muted); font-size: .9rem; font-weight: 600; transition: .15s;
+}
+.tab:hover { border-color: var(--accent); }
+.tab.active { color: var(--text); border-color: var(--accent); background: var(--panel); }
+.tab.busy::after {
+    content: ""; position: absolute; top: 9px; right: 9px; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--accent); animation: pulse 1s infinite;
+}
+@keyframes pulse { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
+
+/* ── прогресс всегда на виду ── */
+#progress-section {
+    position: sticky; top: 0; z-index: 40;
+    background: var(--bg); padding: .5rem 0; margin-bottom: .5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+/* ── зум/позиция графика ── */
+.zoom-controls {
+    display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;
+    margin-top: .5rem; color: var(--muted); font-size: .75rem;
+}
+.zoom-controls label { display: flex; align-items: center; gap: .4rem; }
+.zoom-controls input[type=range] { width: 140px; }
+.zoom-controls button {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; padding: .2rem .6rem; cursor: pointer; font-size: .72rem;
+}
